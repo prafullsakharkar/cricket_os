@@ -1,0 +1,3 @@
+# Exact manifest lines to ignore (known, accepted Django-vs-reference differences).
+# One line per entry, copied verbatim from the workflow's diff output.
+# Keep this file short; every entry should have a comment above it explaining why.

@@ -1,0 +1,70 @@
+name: schema-ddl
+
+# Applies the reference DDL from docs/CRICKET_DATABASE_SCHEMA.md to a clean
+# PostgreSQL (official image, so contrib extensions are present) and runs
+# structural checks. Catches SQL errors and doc/DDL regressions in the PR.
+
+on:
+  pull_request:
+    paths:
+      - "docs/CRICKET_DATABASE_SCHEMA.md"
+      - "scripts/extract_ddl.py"
+      - "ci/ddl_checks.sql"
+      - ".github/workflows/schema-ddl.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/CRICKET_DATABASE_SCHEMA.md"
+      - "scripts/extract_ddl.py"
+      - "ci/ddl_checks.sql"
+
+permissions:
+  contents: read
+
+jobs:
+  apply-ddl:
+    name: DDL on PostgreSQL ${{ matrix.pg }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["16", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ddl_check
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: ddl_check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Extract reference DDL from the schema doc
+        run: python scripts/extract_ddl.py > reference.sql
+
+      - name: Apply DDL (stop on first error)
+        run: psql -v ON_ERROR_STOP=1 -f reference.sql
+
+      - name: Structural checks
+        run: psql -v ON_ERROR_STOP=1 -f ci/ddl_checks.sql
+
+      - name: Upload extracted DDL on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-ddl-pg${{ matrix.pg }}
+          path: reference.sql

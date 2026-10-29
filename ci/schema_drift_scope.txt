@@ -1,0 +1,7 @@
+# Tables compared by the migration-drift workflow (one per line).
+# Add a table here in the same PR that adds its Django model / migration.
+# Phase B example (uncomment as each model lands):
+# country
+# venue
+# team
+# player

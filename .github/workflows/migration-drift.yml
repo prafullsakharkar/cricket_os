@@ -1,0 +1,115 @@
+name: migration-drift
+
+# Compares the schema produced by Django migrations with the reference DDL in
+# docs/CRICKET_DATABASE_SCHEMA.md, for the tables listed in ci/schema_drift_scope.txt.
+# Fails when a model/migration and the doc disagree on columns, types,
+# nullability, generated columns, or index definitions (name-agnostic).
+# NOTE: adapt the env var names / settings module to your Phase A scaffold.
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "config/**"
+      - "docs/CRICKET_DATABASE_SCHEMA.md"
+      - "ci/**"
+      - "scripts/extract_ddl.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/migration-drift.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/django_db
+      REDIS_URL: redis://localhost:6379/0
+      LC_ALL: C
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Create databases
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE ref_db" -c "CREATE DATABASE django_db"
+
+      - name: Load reference DDL into ref_db
+        run: python scripts/extract_ddl.py | psql -d ref_db -v ON_ERROR_STOP=1
+
+      - name: Run Django migrations into django_db
+        run: uv run python manage.py migrate --noinput
+
+      - name: Model changes must have migrations
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Compare schema manifests
+        run: |
+          set -euo pipefail
+          grep -vE '^\s*(#|$)' ci/schema_drift_scope.txt > scope.txt || true
+          if [ ! -s scope.txt ]; then
+            echo "::notice::ci/schema_drift_scope.txt is empty - nothing to compare yet"
+            exit 0
+          fi
+
+          manifest() {
+            psql -d "$1" -At -v ON_ERROR_STOP=1 -f ci/schema_manifest.sql \
+              | awk -F'|' 'NR==FNR { s[$1] = 1; next } ($2 in s)' scope.txt - \
+              | { grep -vxFf ci/schema_drift_allowlist.txt || true; } \
+              | sort
+          }
+
+          manifest ref_db    > ref.txt
+          manifest django_db > dj.txt
+
+          # A scoped table that is missing from either side shows up as a diff.
+          if ! diff -u --label reference-ddl --label django-migrations ref.txt dj.txt; then
+            echo "::error::Django migrations and docs/CRICKET_DATABASE_SCHEMA.md have drifted (see diff above)."
+            echo "Fix the model/migration or update the doc; accepted differences go in ci/schema_drift_allowlist.txt."
+            exit 1
+          fi
+          echo "No drift across $(wc -l < scope.txt) scoped table(s)."
+
+      - name: Upload manifests on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-manifests
+          path: |
+            ref.txt
+            dj.txt
