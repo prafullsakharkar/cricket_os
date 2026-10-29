@@ -1,0 +1,152 @@
+[project]
+name = "cricket-os"
+version = "0.1.0"
+description = "Cricket OS backend — Phase A (Foundation)"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+  "Django==6.1.2",
+  "djangorestframework==3.18.3",
+  "channels==4.3.2",
+  "celery==5.6.3",
+  "django-environ==0.14.0",
+  "psycopg[binary]==3.3.6",
+  "django-redis==7.0.0",
+  "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+  "ruff==0.17.3",
+  "django-stubs[compatible-mypy]==6.1.2",
+  "djangorestframework-stubs==3.18.1",
+  "pytest==9.2.0",
+  "pytest-django==4.14.0",
+  "pytest-cov==7.1.0",
+  "factory-boy==3.3.3",
+  "hypothesis==6.170.13",
+  "import-linter==2.15",
+]
+
+[tool.uv]
+package = false
+
+# --------------------------------------------------------------------------- #
+# pytest / coverage
+# --------------------------------------------------------------------------- #
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+addopts = [
+  "-ra",
+  "--strict-markers",
+  "--strict-config",
+  "--cov=apps/core",
+  "--cov-report=term-missing",
+  "--cov-report=xml:coverage.xml",
+]
+markers = [
+  "unit: fast, no I/O",
+  "integration: touches the database, cache or task queue",
+  "contract: provider-adapter / API-shape contract",
+  "e2e: full match lifecycle",
+]
+
+[tool.coverage.run]
+source = ["apps/core"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+# --------------------------------------------------------------------------- #
+# ruff
+# --------------------------------------------------------------------------- #
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["apps", "config", "tests"]
+extend-exclude = ["docs", ".venv", "**/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "DJ", "RUF", "PTH", "T20"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "ARG001", "ARG002"]
+"config/settings/*" = ["F403", "F405"]
+"apps/core/migrations/*" = ["E501", "F401"]
+# CI helper script (pre-existing) prints DDL to stdout by design.
+"scripts/**" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+# --------------------------------------------------------------------------- #
+# mypy (django-stubs + djangorestframework-stubs)
+# --------------------------------------------------------------------------- #
+[tool.mypy]
+python_version = "3.14"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+no_implicit_reexport = true
+files = ["apps", "config"]
+exclude = ["(?x)(migrations/|config/settings/test\\.py)"]
+
+[[tool.mypy.overrides]]
+module = ["*.migrations.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "channels.*", "django_redis.*", "environ.*", "uvicorn.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+# --------------------------------------------------------------------------- #
+# import-linter
+# --------------------------------------------------------------------------- #
+[tool.importlinter]
+root_packages = ["apps"]
+include_external_packages = false
+
+# Real contract for what exists today: `core` is a leaf package and must not
+# depend on any other first-party app.
+[[tool.importlinter.contracts]]
+name = "core is a leaf (imports no other first-party app)"
+type = "independence"
+modules = ["apps.core"]
+
+# Layering templates — enable one per phase as the apps land.
+#
+# [[tool.importlinter.contracts]]
+# name = "selectors must not import services"
+# type = "forbidden"
+# source_modules = ["apps.*.selectors"]
+# forbidden_modules = ["apps.*.services"]
+#
+# [[tool.importlinter.contracts]]
+# name = "api must not import provider adapters"
+# type = "forbidden"
+# source_modules = ["apps.*.api"]
+# forbidden_modules = ["apps.providers.adapters", "apps.ingestion", "apps.realtime"]
+#
+# [[tool.importlinter.contracts]]
+# name = "no app imports ingestion/realtime/administration"
+# type = "forbidden"
+# source_modules = ["apps"]
+# forbidden_modules = ["apps.ingestion", "apps.realtime", "apps.administration"]
+#
+# [[tool.importlinter.contracts]]
+# name = "scoring may import only core"
+# type = "forbidden"
+# source_modules = ["apps.scoring"]
+# forbidden_modules = ["apps.teams", "apps.players", "apps.matches", "apps.ingestion"]
