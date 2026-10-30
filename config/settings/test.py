@@ -35,3 +35,6 @@ REST_FRAMEWORK = {
 }
 
 THROTTLE_ANON = env("THROTTLE_ANON", default="10000/min")
+
+# Serve the OpenAPI schema in tests (schemathesis contract tests read it).
+ENABLE_API_SCHEMA = True

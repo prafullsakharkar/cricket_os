@@ -11,3 +11,6 @@ DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["*"])
 
 # The browsable API is off (JSON only); add DRF debug niceties here if needed.
+
+# Serve the OpenAPI schema at /api/v1/schema in development.
+ENABLE_API_SCHEMA = True

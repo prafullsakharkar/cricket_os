@@ -60,6 +60,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "channels",
+    "drf_spectacular",
 ]
 
 LOCAL_APPS = [
@@ -67,6 +68,20 @@ LOCAL_APPS = [
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+# drf-spectacular: OpenAPI schema generation. The schema is served at
+# /api/v1/schema in dev/test only (ENABLE_API_SCHEMA); it feeds the
+# contract tests (schemathesis) mandated by TESTING_STRATEGY §4.
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Cricket OS API",
+    "DESCRIPTION": "Read-only public surface for Cricket OS reference data.",
+    "VERSION": "v1",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+}
+
+#: Serve /api/v1/schema only in dev/test (set True there, False in prod).
+ENABLE_API_SCHEMA = env("DJANGO_ENABLE_API_SCHEMA", default=False)
 
 MIDDLEWARE = [
     # First, so it wraps everything and can time/log the whole request.
@@ -165,6 +180,7 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.FormParser",
     ],
     "EXCEPTION_HANDLER": "apps.core.errors.drf_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.CursorPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_AUTHENTICATION_CLASSES": [],

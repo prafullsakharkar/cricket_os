@@ -13,6 +13,7 @@ dependencies = [
   "psycopg[binary]==3.3.6",
   "django-redis==7.0.0",
   "uvicorn==0.54.0",
+  "drf-spectacular>=0.30.0",
 ]
 
 [dependency-groups]
@@ -28,6 +29,8 @@ dev = [
   "import-linter==2.15",
   "pytest-benchmark==5.3.0",
   "mutmut==3.8.1",
+  "schemathesis>=4.32.7",
+  "jsonschema>=4.26.0",
 ]
 
 [tool.uv]
