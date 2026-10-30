@@ -65,7 +65,17 @@ def redis_client() -> object:
 
 @pytest.fixture(autouse=True)
 def _clear_cache() -> Iterator[None]:
-    """Keep the in-memory cache isolated between tests."""
+    """Keep the in-memory cache isolated between tests.
+
+    No-op when Django is not configured (e.g. the pure scoring suite under
+    mutmut, which runs without Django settings): ``cache.clear()`` would force
+    a settings lookup that cannot succeed there.
+    """
+    from django.conf import settings
+
+    if not settings.configured:
+        yield
+        return
     cache.clear()
     yield
     cache.clear()

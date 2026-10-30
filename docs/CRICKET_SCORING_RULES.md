@@ -557,3 +557,63 @@ player_match_stat (per completed match)
 A `recompute(scope)` function can rebuild any subtree (Tier 1 or Tier 2) for
 corrections or historical imports. Because a live delivery only touches Tier 1,
 career and team tables are never rewritten ball-by-ball.
+
+---
+
+## 7. Decisions (recorded during the A+ implementation)
+
+Every ambiguity below was resolved and is enforced by tests; the public surface
+is documented in [SCORING_ENGINE_API.md](SCORING_ENGINE_API.md).
+
+| # | Decision | Rationale |
+|---|---|---|
+| D1 | Wicket counting keys off `is_wicket` (true only for team-tally dismissals + `RETIRED_OUT`); `HURT`/`NOT_OUT` are non-wicket innings events. | The schema/scoring service owns this flag; the engine never re-infers it. |
+| D2 | `Partnership.wicket_number` is a **partnership ordinal**, not a wicket count. An off-ball retirement must open a new partnership without a FOW row, and `ux_partnership(innings_id, wicket_number)` is unique — a collision would otherwise occur. In normal play the ordinal equals wickets fallen. | DATABASE_SCHEMA §3.6 unique constraint vs. SCORING_RULES §2.7 retirement break. |
+| D3 | IDs are opaque strings inside `apps/scoring`; the persistence layer maps them to UUIDs. | Keeps the engine DB-free, hashable and deterministic; Phase C maps columns. |
+| D4 | `apply_delivery` (incremental single-delivery application) is **not** provided. Full rebuilds are ~3 ms (300-ball ODI) / ~6 ms (600-ball Test day). | Incremental state would add complexity for no measurable gain. |
+| D5 | A wide that also carries byes is recorded as `wides + byes`; byes off a no-ball are credited as byes and the bowler is charged only the no-ball penalty. | Matches E4/E6 and the schema's independent extras columns. |
+| D6 | `ball_in_over` is informational; over completion, `overs_display`, maidens and economy all key off `config.balls_per_over` legal balls. | The Hundred (E25); never hard-code 6. |
+| D7 | Test results use aggregate runs with innings-count margins (`by an innings and N runs`); target/wickets only for a genuine 4th-innings chase (`len == 4` and target > 0). | SCORING_RULES §2.9 pseudocode assumed two innings; corrected for 3–4 innings Tests. |
+| D8 | Draw precedence: time-expired (with `allows_draw`) wins over the target-reached branch. | Follows the §2.9 pseudocode order literally. |
+| D9 | `RETIRED_OUT` is a dismissal and gets a FOW row but is never `bowler_credited_wicket`; run-outs likewise. | E9/E11; bowler averages exclude them. |
+| D10 | DLS: the engine raises `MissingDlsTargetError` when `is_dls_applied` has no provider target and `LicensedMethodRequired` on any compute attempt. | §2.13; never self-compute. |
+| D11 | Super Over result is `SUPER_OVER_TIE_BREAK` with a winner when decided; a final tied Super Over reports the tie-break with no winner unless a licensed boundary-count rule is supplied. | §2.12; no unlicensed tie-break invented. |
+| D12 | NRR: full quota per bowled-out **innings**, actual overs for declared innings; no-result and super-over innings contribute nothing by default (config flags opt in). | §2.11/E12/E14/E19. |
+| D13 | `Totals.run_rate`, averages and strike rates are `None` on zero denominators; derived convenience metrics (`dot_pct`, `boundary_pct`, `estimated`) are marked `DERIVED` via field metadata. | §2.3/§4; `safe_div` everywhere. |
+| D14 | Standings order: points desc, then NRR desc, then stable `team_id` asc. A team with **no computable NRR** (no overs in any counted match) ranks **below** every team with a computed NRR at equal points. | Deterministic and defensible: an undefined NRR is not an infinite advantage. |
+
+## 7.1 Mutation testing (score + survivor justifications)
+
+`mutmut` 3.8.1 over `apps/scoring` (2400 mutants, fresh run, 2026-10-30):
+
+| Scope (in the mutation brief) | Killed / total | Score |
+|---|---|---|
+| `laws/` (overs, extras, dismissals, rates) | 405 / 465 | 87.1% |
+| `engine.py` | 148 / 171 | 86.5% |
+| `results.py` | 433 / 524 | 82.6% |
+| `standings.py` | 51 / 52 | 98.1% |
+| **All `apps/scoring`** | **1786 / 2400** | **74.4%** |
+
+0 timeouts, 0 suspicious. Survivors were triaged individually (`mutmut show`
+and the mutated source under `mutants/`); **every survivor is equivalent or
+benign — no real scoring defect was found**:
+
+- **Exception-message strings** (`errors.py`, `validation.py`): mutants change only
+  the message text; tests assert the exception *type* (`pytest.raises(X)`), never
+  the message.
+- **Dataclass default flips** (`types.py`, `results.py`, `standings.py`): deleting a
+  keyword argument or flipping a default (e.g. `rule_version=None`, `text=None`,
+  `innings_id=None`, `estimated=True`, `is_super_over=True`) leaves a value tests do
+  not pin; the real call sites pass correct values.
+- **Case-insensitive float strings** (`standings.py`): `float("-inf")` → `float("-INF")`
+  is the same value; provably unkillable.
+- **Degenerate boundaries** (`results.py`): `len(innings) <= 2` in the Test aggregate
+  branch is unreachable in the tested 3–4 innings configurations (D7).
+- **Under-asserted fields**: standings `played/won/tied/drawn/no_result` deletion
+  mutants survived until a full-outcome-counts test was added; they are now killed
+  (98.1%). The one remaining standings survivor is the equivalent float-string case.
+
+Run: `uv run mutmut run` (config in `pyproject.toml`; `mutants/` and
+`.mutmut-cache/` are gitignored). Known quirk: `mutmut show` crashes on some
+dataclass mutants (mutmut 3.8.1); the `.py.meta` verdict files and the mutated
+source under `mutants/` are authoritative.

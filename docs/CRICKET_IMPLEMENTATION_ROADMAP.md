@@ -102,7 +102,7 @@ error handling, UUIDs, and testing infrastructure.
 
 ---
 
-## Phase A+ — Pure scoring engine (parallel track)
+## Phase A+ — Pure scoring engine (parallel track) — **DONE (commit `…`, branch `phase-a-foundation`)**
 
 **Goal:** build the pure `scoring` engine (no DB, no ORM) as soon as Phase A
 scaffolding exists, so Phase C *integrates* it with persistence rather than
@@ -113,15 +113,21 @@ building it.
      `standings.py`, `results.py`, `dls.py`, `config.py` (`RuleConfig`).
   2. Unit + property tests for the critical algorithms (Phase 5 §5), including
      the `is_wicket`/retirement rules.
+  3. Versioned presets matching the `format_catalogue` seed; typed
+     `ScoringInputError` boundary; DLS provider-only interface; §14 lifecycle
+     scenarios; purity (Django-blocked import) and determinism checks.
 - **Tables/modules:** `scoring` (pure; depends only on `core` types).
 - **Endpoints:** none.
-- **Tests:** scoring unit + hypothesis property tests; a check that `scoring`
-  imports nothing but `core`.
+- **Tests:** 168 scoring tests — unit, Hypothesis properties
+  (`--hypothesis-profile=ci`), §14 scenarios, purity, determinism. Coverage
+  gate **≥ 95% line + branch** on `apps/scoring` (measured 99%); import-linter
+  contract `scoring may import only core`; mutmut report in the final review.
 - **Acceptance:** the engine reproduces expected innings totals/cards for
-  recorded deliveries.
+  recorded deliveries; full ODI rebuild ~3 ms, 600-ball day ~6 ms (benchmarked).
 - **Risks:** rule-convention ambiguity (mitigated by a versioned `RuleConfig`).
-  **Effort:** 10 (moved out of Phase C).
-- **DoD:** pure engine + rule tests green; no database dependency.
+  **Effort:** 10 planned; delivered within scope.
+- **DoD:** pure engine + rule tests green; no database dependency. API surface
+  documented in [`SCORING_ENGINE_API.md`](SCORING_ENGINE_API.md).
 
 ---
 

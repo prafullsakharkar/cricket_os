@@ -5,7 +5,7 @@ MANAGE := $(UV) run python manage.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs migrate makemigrations run worker test test-nocov lint fmt typecheck imports check shell
+.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-nocov lint fmt typecheck imports check shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -35,11 +35,15 @@ run: ## Run the ASGI dev server (uvicorn)
 worker: ## Run a Celery worker
 	$(UV) run celery -A config.celery worker -l info
 
-test: ## Run the full test suite with coverage
-	$(UV) run pytest
+test: ## Run the full test suite with coverage (apps/core >= 90%)
+	$(UV) run pytest --cov=apps/core --cov-report=term-missing --cov-report=xml:coverage.xml
+
+test-scoring: ## Enforce >=95% line+branch coverage on the pure scoring engine
+	$(UV) run pytest -o addopts="" tests/scoring -m "not benchmark" \
+		--cov=apps/scoring --cov-branch --cov-report=term-missing --cov-fail-under=95
 
 test-nocov: ## Run tests without the coverage gate (fast inner loop)
-	$(UV) run pytest --no-cov
+	$(UV) run pytest
 
 lint: ## Lint + format check (ruff)
 	$(UV) run ruff check .
@@ -55,7 +59,7 @@ typecheck: ## Static type check (mypy)
 imports: ## Enforce import boundaries (import-linter)
 	$(UV) run lint-imports
 
-check: lint typecheck imports test ## Everything CI enforces
+check: lint typecheck imports test test-scoring ## Everything CI enforces
 
 shell: ## Django shell
 	$(MANAGE) shell
