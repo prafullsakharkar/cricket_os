@@ -26,6 +26,8 @@ dev = [
   "factory-boy==3.3.3",
   "hypothesis==6.170.13",
   "import-linter==2.15",
+  "pytest-benchmark==5.3.0",
+  "mutmut==3.8.1",
 ]
 
 [tool.uv]
@@ -42,18 +44,22 @@ addopts = [
   "-ra",
   "--strict-markers",
   "--strict-config",
-  "--cov=apps/core",
-  "--cov-report=term-missing",
-  "--cov-report=xml:coverage.xml",
+  "-m",
+  "not benchmark",
 ]
 markers = [
   "unit: fast, no I/O",
   "integration: touches the database, cache or task queue",
   "contract: provider-adapter / API-shape contract",
   "e2e: full match lifecycle",
+  "property: Hypothesis-generated scoring inputs",
+  "scenario: TESTING_STRATEGY §14 lifecycle scenarios",
+  "benchmark: performance smoke benchmarks (excluded by default)",
 ]
 
 [tool.coverage.run]
+# Default gate covers apps/core (>= 90%). apps/scoring has its own stricter
+# gate (>= 95% line + branch) run by `make test-scoring` / CI.
 source = ["apps/core"]
 branch = true
 
@@ -69,7 +75,7 @@ skip_covered = true
 line-length = 100
 target-version = "py314"
 src = ["apps", "config", "tests"]
-extend-exclude = ["docs", ".venv", "**/migrations/*"]
+extend-exclude = ["docs", ".venv", "**/migrations/*", "mutants"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM", "DJ", "RUF", "PTH", "T20"]
@@ -150,3 +156,49 @@ modules = ["apps.core"]
 # type = "forbidden"
 # source_modules = ["apps.scoring"]
 # forbidden_modules = ["apps.teams", "apps.players", "apps.matches", "apps.ingestion"]
+
+# Real contract for the pure scoring engine: no other first-party domain module
+# may be imported. `apps.core` remains the only permitted first-party dependency.
+[[tool.importlinter.contracts]]
+name = "scoring may import only core"
+type = "forbidden"
+source_modules = ["apps.scoring"]
+forbidden_modules = [
+  "apps.teams",
+  "apps.players",
+  "apps.matches",
+  "apps.competitions",
+  "apps.deliveries",
+  "apps.scorecards",
+  "apps.statistics",
+  "apps.fantasy",
+  "apps.providers",
+  "apps.ingestion",
+  "apps.realtime",
+  "apps.administration",
+  "apps.search",
+]
+
+# --------------------------------------------------------------------------- #
+# mutation testing (mutmut) — report-only; survivors are triaged in docs
+# --------------------------------------------------------------------------- #
+[tool.mutmut]
+# Mutated source: the pure scoring engine plus its laws package. The scaffolding
+# (`apps/__init__.py`, `apps/core`) is copied verbatim so the `mutants/` tree is a
+# complete, importable `apps` package that shadows the real repo during mutmut's
+# in-process pytest run (it inserts `mutants/` at the front of sys.path).
+source_paths = ["apps/scoring"]
+also_copy = ["apps/__init__.py", "apps/core"]
+pytest_add_cli_args_test_selection = ["tests/scoring"]
+# Keep pytest-django loaded (so its ini keys stay known under ``--strict-config``)
+# but neutralise it: blank DJANGO_SETTINGS_MODULE (no settings import) and disable
+# django_find_project (which would insert the real repo root at sys.path[0] and let
+# the real ``apps`` shadow the mutated copy). The scoring tests are pure Python.
+pytest_add_cli_args = [
+  "-o",
+  "DJANGO_SETTINGS_MODULE=",
+  "-o",
+  "django_find_project=false",
+  "--hypothesis-profile=mutmut",
+]
+

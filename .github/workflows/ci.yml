@@ -132,7 +132,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
       - name: Tests with coverage gate (apps/core >= 90%)
-        run: uv run pytest
+        run: |
+          uv run pytest --cov=apps/core --cov-report=term-missing --cov-report=xml:coverage.xml
+      - name: Scoring coverage gate (apps/scoring >= 95% line+branch)
+        run: |
+          uv run pytest -o addopts="" tests/scoring -m "not benchmark" \
+            --cov=apps/scoring --cov-branch --cov-report=term-missing --cov-fail-under=95
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
