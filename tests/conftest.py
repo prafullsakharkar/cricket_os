@@ -79,3 +79,29 @@ def _clear_cache() -> Iterator[None]:
     cache.clear()
     yield
     cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_event_subscriptions() -> Iterator[None]:
+    """Keep the event bus isolated between tests (Group 4, Task 4.3).
+
+    The bus is a module-global registry populated by ``AppConfig.ready()``.
+    Ad-hoc handlers a test subscribes must not leak into the next test, and
+    the production audit handlers must be present for tests that exercise
+    them. No-op when Django is not configured (pure scoring suite under
+    mutmut).
+    """
+    from django.conf import settings
+
+    if not settings.configured:
+        yield
+        return
+    from apps.administration import handlers
+    from apps.core import events
+
+    events.clear_subscriptions()
+    events.subscribe(events.TOPIC_PLAYER_MERGED, handlers.on_player_merged)
+    events.subscribe(events.TOPIC_PROVIDER_MAP_VERIFIED, handlers.on_provider_map_verified)
+    events.subscribe(events.TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
+    yield
+    events.clear_subscriptions()

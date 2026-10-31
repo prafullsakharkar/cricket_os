@@ -38,3 +38,7 @@ THROTTLE_ANON = env("THROTTLE_ANON", default="10000/min")
 
 # Serve the OpenAPI schema in tests (schemathesis contract tests read it).
 ENABLE_API_SCHEMA = True
+
+# Test-only app proving the player-reference registry is extensible
+# (Group 4). Never installed outside the test settings.
+INSTALLED_APPS = [*INSTALLED_APPS, "tests.dummy_app"]
