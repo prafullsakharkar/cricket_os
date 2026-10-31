@@ -1,0 +1,20 @@
+# Curated seed grounds (Phase B Group 6 importer).
+#
+# A deliberately tiny set of well-known international venues used as reference
+# data until real provider venue registers are ingested. Imported by
+# `manage.py import_cricsheet_register` when no --venues file is given (each
+# row also seeds a Ground under the venue).
+#
+# Columns: name,city,country_iso,timezone
+# country_iso must exist in the seeded `country` table (venues.0002); timezone
+# must be a valid IANA timezone id (validate_iana_timezone).
+name,city,country_iso,timezone
+Lord's,London,GB,Europe/London
+Melbourne Cricket Ground,Melbourne,AU,Australia/Melbourne
+Sydney Cricket Ground,Sydney,AU,Australia/Sydney
+Eden Gardens,Kolkata,IN,Asia/Kolkata
+M. Chinnaswamy Stadium,Bengaluru,IN,Asia/Kolkata
+Newlands,Cape Town,ZA,Africa/Johannesburg
+Basin Reserve,Wellington,NZ,Pacific/Auckland
+Gaddafi Stadium,Lahore,PK,Asia/Karachi
+Sher-e-Bangla National Stadium,Dhaka,BD,Asia/Dhaka

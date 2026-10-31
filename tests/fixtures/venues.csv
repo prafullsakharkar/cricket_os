@@ -1,0 +1,7 @@
+# Golden venue register (Group 6 importer fixtures; <=200 rows).
+# Cricsheet venues.csv shape: identifier,name,unique_name,key_cricinfo.
+# key_cricinfo must NOT be imported by default (venue keys never are).
+identifier,name,unique_name,key_cricinfo
+v-0001,Lord's,Lords,ci-ground-1
+v-0002,Melbourne Cricket Ground,MCG,ci-ground-2
+v-0003,Eden Gardens,Eden,ci-ground-3

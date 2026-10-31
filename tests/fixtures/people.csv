@@ -1,0 +1,15 @@
+# Golden people register (Group 6 importer fixtures; <=200 rows).
+# Realistic Cricsheet people.csv shape: identifier,name,unique_name plus
+# key_* external-id columns. key_cricbuzz / key_cricinfo must NOT be imported
+# by default (CRICSHEET_KEY_ALLOWLIST = [key_opta, key_pulse]).
+identifier,name,unique_name,key_bcci,key_opta,key_pulse,key_cricbuzz,key_cricinfo
+p-0001,Virat Kohli,V Kohli,bcci-001,opt-1001,kp-9001,cbz-7001,ci-5001
+p-0002,Rohit Sharma,RG Sharma,bcci-002,opt-1002,kp-9002,cbz-7002,ci-5002
+p-0003,Jasprit Bumrah,JB,bcci-003,opt-1003,kp-9003,cbz-7003,ci-5003
+p-0004,Ben Stokes,BS,ecb-001,opt-1004,kp-9004,cbz-7004,ci-5004
+p-0005,Jos Buttler,JB,ecb-002,opt-1005,kp-9005,cbz-7005,ci-5005
+p-0006,Kane Williamson,KW,nzc-001,opt-1006,kp-9006,cbz-7006,ci-5006
+p-0007,Trent Boult,TB,nzc-002,opt-1007,kp-9007,cbz-7007,ci-5007
+p-0008,Babar Azam,BA,pcb-001,opt-1008,kp-9008,cbz-7008,ci-5008
+p-0009,Shakib Al Hasan,SAH,bcb-001,opt-1009,kp-9009,cbz-7009,ci-5009
+p-0010,Pat Cummins,PC,ca-001,opt-1010,kp-9010,cbz-7010,ci-5010

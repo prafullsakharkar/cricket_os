@@ -1,0 +1,9 @@
+# Golden names register (Group 6 importer fixtures; <=200 rows).
+# Cricsheet names.csv shape: identifier,name (alternate name variants).
+identifier,name
+p-0001,V Kohli
+p-0001,Virat
+p-0002,Rohit Gurunath Sharma
+p-0004,Benjamin Andrew Stokes
+p-0006,KS Williamson
+p-0008,Babar Azam Khan

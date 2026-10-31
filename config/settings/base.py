@@ -150,6 +150,11 @@ IDENTITY_MATCH_THRESHOLD = 0.95
 #: New stubs with a candidate at or above this score are flagged for steward
 #: review (PlayerDuplicateCandidate rows); never auto-merged.
 DUPLICATE_CANDIDATE_THRESHOLD = 0.60
+#: Cricsheet register ``key_*`` columns imported into ProviderEntityMap rows by
+#: ``import_cricsheet_register``. Values here are external identifiers the
+#: platform records alongside the Cricsheet identifier. key_cricbuzz /
+#: key_cricinfo are excluded by default pending the Phase 0 licensing review.
+CRICSHEET_KEY_ALLOWLIST = ["key_opta", "key_pulse"]
 
 # --------------------------------------------------------------------------- #
 # Cache / Celery
