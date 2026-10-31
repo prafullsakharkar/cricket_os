@@ -1,7 +1,22 @@
 # Tables compared by the migration-drift workflow (one per line).
 # Add a table here in the same PR that adds its Django model / migration.
-# Phase B example (uncomment as each model lands):
-# country
-# venue
-# team
-# player
+# Phase B: the 19 reference-data tables (DATABASE_SCHEMA §3.2–3.4, §3.8).
+country
+governing_body
+venue
+ground
+format_catalogue
+team
+player
+player_merge
+player_duplicate_candidate
+team_membership
+squad
+squad_member
+competition
+season
+series
+match_stage
+data_provider
+provider_entity_map
+audit_log

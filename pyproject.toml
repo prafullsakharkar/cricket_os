@@ -88,6 +88,11 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 "tests/**" = ["S101", "PLR2004", "ARG001", "ARG002"]
 "config/settings/*" = ["F403", "F405"]
 "apps/core/migrations/*" = ["E501", "F401"]
+# Django model files: DJ001 (null=True on text/char fields) is mandated by the
+# reference DDL (nullable text columns — the schema-drift check enforces NULL vs
+# NOT NULL), and RUF012 fires on the standard `class Meta` constraints/indexes
+# lists. Both are required Django idioms here, not lapses.
+"apps/**/models.py" = ["DJ001", "RUF012"]
 # CI helper script (pre-existing) prints DDL to stdout by design.
 "scripts/**" = ["T201"]
 
@@ -134,31 +139,46 @@ name = "core is a leaf (imports no other first-party app)"
 type = "independence"
 modules = ["apps.core"]
 
-# Layering templates — enable one per phase as the apps land.
-#
-# [[tool.importlinter.contracts]]
-# name = "selectors must not import services"
-# type = "forbidden"
-# source_modules = ["apps.*.selectors"]
-# forbidden_modules = ["apps.*.services"]
-#
-# [[tool.importlinter.contracts]]
-# name = "api must not import provider adapters"
-# type = "forbidden"
-# source_modules = ["apps.*.api"]
-# forbidden_modules = ["apps.providers.adapters", "apps.ingestion", "apps.realtime"]
-#
-# [[tool.importlinter.contracts]]
-# name = "no app imports ingestion/realtime/administration"
-# type = "forbidden"
-# source_modules = ["apps"]
-# forbidden_modules = ["apps.ingestion", "apps.realtime", "apps.administration"]
-#
-# [[tool.importlinter.contracts]]
-# name = "scoring may import only core"
-# type = "forbidden"
-# source_modules = ["apps.scoring"]
-# forbidden_modules = ["apps.teams", "apps.players", "apps.matches", "apps.ingestion"]
+# Six-layer discipline (Phase B): selectors are read-optimised and must never
+# reach into services; the API layer never touches provider adapters; the
+# domain apps never import administration/ingestion/realtime; and the two
+# mutually-referencing model modules (teams <-> players) never import each
+# other's models directly (lazy string FKs only).
+[[tool.importlinter.contracts]]
+name = "selectors must not import services"
+type = "forbidden"
+source_modules = ["apps.*.selectors"]
+forbidden_modules = ["apps.*.services"]
+
+[[tool.importlinter.contracts]]
+name = "api must not import provider adapters or ingestion/realtime"
+type = "forbidden"
+source_modules = ["apps.*.api"]
+forbidden_modules = ["apps.providers.adapters", "apps.ingestion", "apps.realtime"]
+
+[[tool.importlinter.contracts]]
+name = "domain apps never import administration/ingestion/realtime"
+type = "forbidden"
+source_modules = [
+  "apps.venues",
+  "apps.teams",
+  "apps.players",
+  "apps.competitions",
+  "apps.providers",
+]
+forbidden_modules = ["apps.administration", "apps.ingestion", "apps.realtime"]
+
+[[tool.importlinter.contracts]]
+name = "teams model module never imports players models"
+type = "forbidden"
+source_modules = ["apps.teams.models"]
+forbidden_modules = ["apps.players.models"]
+
+[[tool.importlinter.contracts]]
+name = "players model module never imports teams models"
+type = "forbidden"
+source_modules = ["apps.players.models"]
+forbidden_modules = ["apps.teams.models"]
 
 # Real contract for the pure scoring engine: no other first-party domain module
 # may be imported. `apps.core` remains the only permitted first-party dependency.

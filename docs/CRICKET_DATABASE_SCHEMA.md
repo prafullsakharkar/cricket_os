@@ -82,6 +82,8 @@ erDiagram
   PLAYER ||--o{ PLAYER_RANKING : ranked
   PLAYER ||--o{ FORM_TREND : trend
   PLAYER ||--o{ PLAYER_MERGE : merged_into
+  PLAYER ||--o{ PLAYER_DUPLICATE_CANDIDATE : "candidate_of"
+  PLAYER ||--o{ PLAYER_DUPLICATE_CANDIDATE : "canonical_of"
   TEAM ||--o{ HEAD_TO_HEAD : h2h
   SERIES ||--o{ LEADERBOARD : has
 
@@ -210,6 +212,15 @@ erDiagram
     uuid merged_player_id FK
     text reason
     timestamptz merged_at
+  }
+  PLAYER_DUPLICATE_CANDIDATE {
+    uuid id PK
+    uuid candidate_player_id FK
+    uuid canonical_player_id FK
+    numeric score
+    jsonb feature_breakdown
+    text status
+    timestamptz created_at
   }
   AUDIT_LOG {
     uuid id PK
@@ -426,6 +437,27 @@ CREATE TABLE cricket.player_merge (
   CONSTRAINT ck_player_merge_distinct CHECK (canonical_player_id <> merged_player_id)
 );
 CREATE INDEX ix_player_merge_canonical ON cricket.player_merge (canonical_player_id);
+
+-- Steward review queue: a scored (candidate, plausible-canonical) pair. Rows
+-- are created by identity resolution (Phase B), reviewed and acted on by
+-- stewards (merge or reject); status transitions open -> resolved|merged.
+CREATE TABLE cricket.player_duplicate_candidate (
+  id                  uuid PRIMARY KEY,
+  candidate_player_id uuid NOT NULL REFERENCES cricket.player(id),
+  canonical_player_id uuid NOT NULL REFERENCES cricket.player(id),
+  score               numeric(4,3) NOT NULL,
+  feature_breakdown   jsonb NOT NULL,
+  status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','merged')),
+  reviewed_by         uuid,
+  reviewed_at         timestamptz,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ux_dup_candidate ON cricket.player_duplicate_candidate
+  (candidate_player_id, canonical_player_id);
+CREATE INDEX ix_dup_candidate_status ON cricket.player_duplicate_candidate
+  (status, created_at DESC);
+CREATE INDEX ix_dup_candidate_canonical ON cricket.player_duplicate_candidate
+  (canonical_player_id);
 ```
 
 ### 3.4 Competitions, seasons, series

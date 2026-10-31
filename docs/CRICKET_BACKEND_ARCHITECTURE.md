@@ -35,17 +35,17 @@ the module primarily owns (§4).
 |---|---|---|---|---|---|
 | `core` | Base models, enums, UUIDv7, config, logging, pagination, error envelope, time utils | `TimeStampedModel`, enums | mixins, `RuleConfig` registry | — | — |
 | `teams` | Teams, memberships, squads | `Team`, `TeamMembership`, `Squad`, `SquadMember` | `team_service`, `squad_service`; `team_selector` | `team.updated` | `core`, `venues` |
-| `players` | Player identity, profiles, registry mapping, merges | `Player`, `PlayerMerge` | `player_service`, `identity_resolution`; `player_selector` | `player.updated` | `core`, `teams` |
+| `players` | Player identity, profiles, registry mapping, merges, duplicate review | `Player`, `PlayerMerge`, `PlayerDuplicateCandidate` | `player_service`, `identity_resolution`; `player_selector` | `player.updated`, `player.merged` | `core`, `teams` |
 | `venues` | Venues, grounds, countries, governing bodies | `Venue`, `Ground`, `Country`, `GoverningBody` | `venue_service` | `venue.updated` | `core` |
-| `competitions` | Competitions, seasons, series, stages | `Competition`, `Season`, `Series`, `MatchStage` | `series_service`; `series_selector` | `series.updated` | `core`, `teams` |
-| `matches` | Match aggregate, participation, toss, officials, results, awards, format rules | `Match`, `MatchTeam`, `Toss`, `MatchPlayer`, `MatchOfficial`, `MatchResult`, `MatchAward`, `FormatCatalogue` | `match_service`, `result_service`; `match_selector` | `match.updated`, `match.state_changed`, `match.completed` | `core`, `competitions`, `teams`, `players`, `venues` |
+| `competitions` | Competitions, seasons, series, stages, per-format rules | `Competition`, `Season`, `Series`, `MatchStage`, `FormatCatalogue` | `series_service`; `series_selector` | `series.updated` | `core`, `teams` |
+| `matches` | Match aggregate, participation, toss, officials, results, awards | `Match`, `MatchTeam`, `Toss`, `MatchPlayer`, `MatchOfficial`, `MatchResult`, `MatchAward` | `match_service`, `result_service`; `match_selector` | `match.updated`, `match.state_changed`, `match.completed` | `core`, `competitions`, `teams`, `players`, `venues` |
 | `innings` | Innings lifecycle, innings-level events (retirements/resume without a ball) | `Innings`, `InningsSummary`, `InningsEvent` | `innings_service`; `innings_selector` | `innings.updated` | `matches` |
 | `deliveries` | Ball-by-ball facts, overs | `Delivery`, `Over` | `delivery_service` (append/idempotent); `delivery_selector` | `delivery.appended`, `delivery.corrected` | `innings`, `players` |
 | `scorecards` | Derived card read-models + rebuild orchestration | `BattingEntry`, `BowlingEntry`, `FallOfWicket`, `Partnership` | `scorecard_service.rebuild`; `scorecard_selector` | `scorecard.updated` | `deliveries`, `scoring` |
 | `statistics` | Per-match & career/team aggregates, leaderboards, H2H, form | `PlayerMatchStat`, `PlayerCareerStat`, `TeamStat`, `HeadToHead`, `Leaderboard`, `FormTrend` | `stats_service.rebuild`; `stats_selector` | `stats.updated` | `deliveries`, `matches` |
 | `rankings` | ICC rankings (provider-supplied) | `PlayerRanking` | `ranking_service`; `ranking_selector` | `ranking.updated` | `core`, `players` |
 | `fantasy` | Optional fantasy scoring | Fantasy tables (§ domain model 5) | `fantasy_service.compute`; `fantasy_selector` | `fantasy.computed` | `statistics`, `matches` |
-| `providers` | Provider registry, entity maps, adapters registry | `DataProvider`, `ProviderEntityMap` | `provider_registry`, adapters (`adapters/`) | — | `core` |
+| `providers` | Provider registry, entity maps, adapters registry, identity resolution | `DataProvider`, `ProviderEntityMap` | `provider_registry`, `providers.services.resolve` (generic resolver registry), adapters (`adapters/`) | `provider_map.verified` | `core` |
 | `ingestion` | Fetch → validate → resolve → persist pipeline | `ImportJob`, `IngestionError` | `ingest_*` tasks, validators | `ingestion.completed`, `ingestion.failed` | `providers`, all domain modules |
 | `synchronization` | Checkpoints, reconciliation, corrections | `SyncCheckpoint`, `ReconciliationJob`, `DataCorrection` | `sync_service`, `reconcile_service` | `correction.applied` | `providers`, `ingestion` |
 | `search` | Cross-entity search & filtering | (no models; index tables/projections) | `search_service` | — | `teams`, `players`, `competitions`, `matches` |

@@ -1,3 +1,35 @@
 # Exact manifest lines to ignore (known, accepted Django-vs-reference differences).
 # One line per entry, copied verbatim from the workflow's diff output.
+# The filter runs against BOTH databases independently, so each accepted
+# difference needs its reference-DDL line AND its Django-migrations line.
 # Keep this file short; every entry should have a comment above it explaining why.
+#
+# Category 1 — fixed-length char(N) columns (gender, ISO codes). The reference
+# DDL declares `char(N)`; Django has no fixed-length character column type, so
+# CharField maps to `character varying(N)`. Semantics are preserved: both store
+# the same text and the CHECK/validators enforce the allowed values.
+col|competition|gender|character(1)|NOT NULL|plain
+col|competition|gender|character varying(1)|NOT NULL|plain
+col|country|iso3|character(3)|NULL|plain
+col|country|iso3|character varying(3)|NULL|plain
+col|country|iso_code|character(2)|NULL|plain
+col|country|iso_code|character varying(2)|NULL|plain
+col|player|gender|character(1)|NOT NULL|plain
+col|player|gender|character varying(1)|NOT NULL|plain
+col|team|gender|character(1)|NOT NULL|plain
+col|team|gender|character varying(1)|NOT NULL|plain
+#
+# Category 2 — trigram opclass schema qualification. The reference DDL writes
+# `gin_trgm_ops`; Django emits `cricket.gin_trgm_ops` because the extension
+# opclass is resolved against the connection's search_path ("$user", public).
+# Same operator class, same index.
+idx|player|CREATE INDEX ON cricket.player USING gin (full_name gin_trgm_ops)
+idx|player|CREATE INDEX ON cricket.player USING gin (full_name cricket.gin_trgm_ops)
+idx|team|CREATE INDEX ON cricket.team USING gin (name gin_trgm_ops)
+idx|team|CREATE INDEX ON cricket.team USING gin (name cricket.gin_trgm_ops)
+#
+# Category 3 — auto LIKE index. Django adds a `*_pattern_ops` btree index for
+# every db_index'd varchar/text column (postgresql/schema.py, LIKE lookups
+# outside the C locale). The reference DDL does not declare one for the
+# format_catalogue PK; the index is a harmless query-planning aid.
+idx|format_catalogue|CREATE INDEX ON cricket.format_catalogue USING btree (format text_pattern_ops)

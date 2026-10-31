@@ -150,6 +150,26 @@ diagram and PostgreSQL DDL.
 - **Class:** SRC/audit (append-only). **Versioning:** the table is the history.
 - **Example:** `{canonical:"Pat Cummins", merged:"P Cummins (dup)", reason:"same DoB + name key"}`.
 
+### 1.16 PlayerDuplicateCandidate (steward review queue)
+- **Purpose:** A scored (candidate, plausible-canonical) player pair awaiting
+  steward review. Created by identity resolution whenever a new entity's best
+  matches land above `DUPLICATE_CANDIDATE_THRESHOLD`; a steward merges or
+  rejects each pair, so duplicate players never auto-merge (see
+  [IDENTITY_RESOLUTION.md](IDENTITY_RESOLUTION.md)).
+- **Fields:** `id uuid PK`; `candidate_player_id uuid not null FK player`;
+  `canonical_player_id uuid not null FK player`; `score numeric(4,3) not null`;
+  `feature_breakdown jsonb not null` (per-feature scores, raw values, any cap
+  applied); `status text not null default 'open' CHECK in
+  ('open','resolved','merged')`; `reviewed_by uuid null`; `reviewed_at
+  timestamptz null`; `created_at timestamptz not null default now()`.
+- **Unique:** `ux_dup_candidate (candidate_player_id, canonical_player_id)`.
+- **Indexes:** `ix_dup_candidate_status (status, created_at DESC)`,
+  `ix_dup_candidate_canonical (canonical_player_id)`.
+- **Class:** SRC/operational (steward queue). **Versioning:** status transitions
+  are audited via the `player_duplicate.reviewed` event.
+- **Example:** `{candidate:"V Kohli", canonical:"Virat Kohli", score:0.94,
+  breakdown:{name:0.99, dob:1.0, country:1.0}, status:"open"}`.
+
 ---
 
 ## 2. Match scheduling & participation

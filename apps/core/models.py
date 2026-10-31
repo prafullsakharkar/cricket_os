@@ -36,7 +36,7 @@ class ProvenanceModel(models.Model):
 
     # NULL means "not sourced from a provider" (internally-created row), which
     # is distinct from an empty provider id — so null is intentional here.
-    source_provider_id = models.TextField(null=True, blank=True)  # noqa: DJ001
+    source_provider_id = models.TextField(null=True, blank=True)
     provider_updated_at = models.DateTimeField(null=True, blank=True)
     ingested_at = models.DateTimeField(null=True, blank=True)
     revision = models.PositiveIntegerField(default=1)
