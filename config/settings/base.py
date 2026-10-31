@@ -143,6 +143,15 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --------------------------------------------------------------------------- #
+# Identity resolution thresholds (IDENTITY_RESOLUTION.md §2)
+# --------------------------------------------------------------------------- #
+#: A unique candidate scoring at or above this is linked without review.
+IDENTITY_MATCH_THRESHOLD = 0.95
+#: New stubs with a candidate at or above this score are flagged for steward
+#: review (PlayerDuplicateCandidate rows); never auto-merged.
+DUPLICATE_CANDIDATE_THRESHOLD = 0.60
+
+# --------------------------------------------------------------------------- #
 # Cache / Celery
 # --------------------------------------------------------------------------- #
 CACHES = {
