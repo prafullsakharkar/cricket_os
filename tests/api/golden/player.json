@@ -1,0 +1,30 @@
+{
+  "data": {
+    "batting_style": "RIGHT_HAND",
+    "birth_country": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "iso3": "CAN",
+      "iso_code": "CA",
+      "name": "Canada"
+    },
+    "birth_place": null,
+    "bowling_style": "RIGHT_ARM_OFFBREAK",
+    "date_of_birth": "1970-05-04",
+    "date_of_death": null,
+    "full_name": "John Davison",
+    "gender": "M",
+    "height_cm": null,
+    "id": "00000000-0000-4000-8000-000000000005",
+    "international_team": {
+      "abbreviation": "CA",
+      "id": "00000000-0000-4000-8000-000000000004",
+      "name": "Canada",
+      "short_name": "CAN",
+      "team_type": "international"
+    },
+    "is_wicketkeeper": false,
+    "known_as": "JD",
+    "primary_role": "ALL_ROUNDER",
+    "unique_name": null
+  }
+}

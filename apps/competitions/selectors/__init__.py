@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from apps.competitions.selectors.competitions import (
+    COMPETITION_ORDERINGS,
+    SERIES_ORDERINGS,
     get_competition,
     get_format,
     get_series,
@@ -11,6 +13,8 @@ from apps.competitions.selectors.competitions import (
 )
 
 __all__ = [
+    "COMPETITION_ORDERINGS",
+    "SERIES_ORDERINGS",
     "get_competition",
     "get_format",
     "get_series",

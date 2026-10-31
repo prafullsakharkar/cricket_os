@@ -1,0 +1,29 @@
+{
+  "data": {
+    "abbreviation": "CA",
+    "country": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "iso3": "CAN",
+      "iso_code": "CA",
+      "name": "Canada"
+    },
+    "gender": "M",
+    "governing_body": {
+      "abbreviation": null,
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "Cricket Canada",
+      "type": "national"
+    },
+    "home_venue": {
+      "city": "Toronto",
+      "id": "00000000-0000-4000-8000-000000000003",
+      "name": "Maple Leaf Cricket Club",
+      "timezone": "America/Toronto"
+    },
+    "id": "00000000-0000-4000-8000-000000000004",
+    "is_international": false,
+    "name": "Canada",
+    "short_name": "CAN",
+    "team_type": "international"
+  }
+}

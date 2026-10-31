@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from apps.players.selectors.players import (
+    PLAYER_ORDERINGS,
     get_player,
     list_duplicate_candidates,
     list_players,
+    resolve_player_redirect,
 )
 
-__all__ = ["get_player", "list_duplicate_candidates", "list_players"]
+__all__ = [
+    "PLAYER_ORDERINGS",
+    "get_player",
+    "list_duplicate_candidates",
+    "list_players",
+    "resolve_player_redirect",
+]

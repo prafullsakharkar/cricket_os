@@ -33,7 +33,11 @@ def list_teams(
         qs = qs.filter(country_id=country)
 
     if q:
-        qs = qs.annotate(similarity=TrigramSimilarity("name", q)).filter(similarity__gte=0.2)
+        # The `%` operator (__trigram_similar) is the index-backed form: a GIN
+        # scan on ix_team_name_trgm (similarity() >= x alone cannot use it).
+        # The recall threshold is the pg_trgm session default (0.3); ranking
+        # still uses the annotated similarity.
+        qs = qs.annotate(similarity=TrigramSimilarity("name", q)).filter(name__trigram_similar=q)
     # The `similarity` annotation is dynamic; django-stubs cannot resolve it.
     qs = qs.order_by("-similarity", "name") if q else qs.order_by(ordering)  # type: ignore[misc]
     return qs.select_related("country", "governing_body", "home_venue")

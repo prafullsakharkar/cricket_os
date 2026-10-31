@@ -73,8 +73,8 @@ responses also carry the source local date/time and timezone.
 
 | Method | Path | Purpose | Cache |
 |---|---|---|---|
-| GET | `/players` | Search/list (`q,team,country,role,format`) | `max-age=300` |
-| GET | `/players/{id}` | Profile | `max-age=300, swr=600` |
+| GET | `/players` | Search/list (`q,team,country,role`); **cursor when no `q`, page-number when ranked by `q`** | `max-age=300` |
+| GET | `/players/{id}` | Profile; **merged ids answer `301` → canonical** | `max-age=300, swr=600` |
 | GET | `/players/{id}/statistics` | Career/format aggregates (`?scope=&format=&gender=`) | `max-age=300` |
 | GET | `/players/{id}/matches` | Match history (cursor) | `max-age=120` |
 | GET | `/players/{id}/form` | Recent form windows | `max-age=120` |
@@ -104,6 +104,13 @@ responses also carry the source local date/time and timezone.
 | GET | `/series/{id}/venues` | Venues | `max-age=600` |
 | GET | `/competitions` `/competitions/{id}` | Competition + seasons | `max-age=600` |
 | GET | `/archives` | Series by year/category | `max-age=300` |
+
+### 2.7 Venues (reference data)
+
+| Method | Path | Purpose | Cache |
+|---|---|---|---|
+| GET | `/venues` | Venue list (`q,country`) | `max-age=600` |
+| GET | `/venues/{id}` | Venue detail (nested country) | `max-age=600` |
 
 ### 2.5 Statistics
 
@@ -239,6 +246,54 @@ seconds-level live freshness and long-lived completed content:
 
 ---
 
+### 3.10 Reference-data endpoints (players, teams, competitions, series, venues)
+
+The read-only reference surface implemented in Phase B: two endpoints per
+domain (list + detail) under `/api/v1/`. All responses follow the §1 envelope
+(items are wrapped in `{"data": …}`), carry a **strong `ETag`**, honour
+`If-None-Match` with `304`, and render timestamps as UTC ISO-8601.
+
+| Endpoint | Filters | Sort allow-list | `Cache-Control` |
+|---|---|---|---|
+| `GET /players` | `q` (trigram), `team` (UUID), `country` (UUID or ISO-2), `role` | `full_name, -full_name, date_of_birth, -date_of_birth` | `public, max-age=300` |
+| `GET /players/{id}` | — | — | `public, max-age=300, stale-while-revalidate=600` |
+| `GET /teams` | `q`, `category`, `country` | `name, -name, country, -country, team_type, -team_type` | `public, max-age=600` |
+| `GET /teams/{id}` | — | — | `public, max-age=600` |
+| `GET /competitions` | `q`, `type` | `name, -name` | `public, max-age=600` |
+| `GET /competitions/{id}` | — (nested `seasons`) | — | `public, max-age=600` |
+| `GET /series` | `year`, `category`, `type` | `start_date, -start_date, name, -name` | `public, max-age=600` |
+| `GET /series/{id}` | — (nested competition/season/host) | — | `public, max-age=60` |
+| `GET /venues` | `q`, `country` | `name, -name` | `public, max-age=600` |
+| `GET /venues/{id}` | — | — | `public, max-age=600` |
+
+- **Sparse fields.** `?fields=a,b` on any list/detail endpoint restricts the
+  payload to the named fields (validated against the endpoint's allow-list;
+  unknown names → `400 invalid_query`). `meta` is never affected.
+- **Sorting.** `?sort=` accepts an allow-listed field, optionally `-`-prefixed;
+  anything else → `400 invalid_query`. Lists default to their primary sort.
+- **Merged players → `301`.** A merged (superseded) player id answers
+  `301 Moved Permanently` with `Location: /api/v1/players/{canonical}/`, an
+  **empty body and no `Cache-Control`/`ETag`** — the redirect must be resolved
+  fresh, never cached. Redirect chains are followed to the ultimate canonical;
+  a corrupt cycle is treated as not-merged (`200`).
+- **Dual pagination on `/players`.** With no `q`, the list is a stable cursor
+  feed (`?cursor=&limit=`, keyset on `(full_name, id)` — `meta.limit`,
+  `meta.has_more`, `meta.next_cursor`). With `q`, results are **ranked** by
+  trigram similarity, so pagination switches to page-number
+  (`?page=&page_size=` — `meta.total_count` etc.) because a ranked order
+  cannot be a stable keyset.
+- **Trigram search.** `q` uses the GIN-index-backed `%` operator
+  (`ix_team_name_trgm`, `ix_player_name_trgm`); the recall threshold is the
+  pg_trgm session default (0.3) and results are ranked by annotated similarity.
+- **Errors.** Unknown ids → `404 not_found` (envelope); non-UUID path ids →
+  `404` (never `500`); unknown `fields`/`sort`/`year`/`country` → `400
+  invalid_query`.
+- **`?provider_id=` (admin-only).** Filtering reference entities by provider
+  id is a privileged operation and is **deferred to the auth phase** (Phase F);
+  it will require an authenticated admin session, never a public key.
+
+---
+
 ## 4. Representative JSON responses
 
 ### 4.1 Live matches
@@ -356,13 +411,14 @@ seconds-level live freshness and long-lived completed content:
 ## 5. Pagination, filtering, sorting reference
 
 - **Cursor pagination** for time-ordered feeds (`live`, `deliveries`,
-  `commentary`, `matches/{id}/matches`): cursor encodes
-  `(sort_key, id)`; stable under inserts.
+  `commentary`, `matches/{id}/matches`, and `/players` without `q`): cursor
+  encodes `(sort_key, id)`; stable under inserts.
 - **Offset pagination** for bounded tables (`rankings`, `points-table`,
-  `leaderboard`): `?page=&page_size=` with total count.
+  `leaderboard`, and ranked `/players?q=`): `?page=&page_size=` with total count.
 - **Allow-listed sort fields** per endpoint (e.g. matches:
-  `start_time_utc,-start_time_utc`; players: `name,runs,wickets,average`).
+  `start_time_utc,-start_time_utc`; reference endpoints: see §3.10).
 - **Filters** are AND-combined; repeated params are OR-combined where sensible.
+- **Sparse fields** (`?fields=`) apply to every reference endpoint; see §3.10.
 
 ## 6. Authentication & authorization
 

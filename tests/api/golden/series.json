@@ -1,0 +1,25 @@
+{
+  "data": {
+    "competition": {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "name": "Canada Cup"
+    },
+    "end_date": "2026-08-31",
+    "host_country": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "iso3": "CAN",
+      "iso_code": "CA",
+      "name": "Canada"
+    },
+    "id": "00000000-0000-4000-8000-000000000007",
+    "is_tournament": false,
+    "name": "Canada Cup 2026",
+    "season": {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "label": "2026"
+    },
+    "series_type": "tournament",
+    "short_name": "CC2026",
+    "start_date": "2026-06-01"
+  }
+}

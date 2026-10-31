@@ -180,6 +180,26 @@ def _details_from(data: Any) -> Any:
     return None
 
 
+def handler404(request: Any, exception: Any = None) -> Any:
+    """Envelope a URL-level 404 (unmatched path / non-UUID id)."""
+    from django.http import JsonResponse
+
+    return JsonResponse(
+        error_payload("not_found", CODE_MESSAGES["not_found"]),
+        status=404,
+    )
+
+
+def handler500(request: Any) -> Any:
+    """Envelope an unhandled URL-level error without leaking internals."""
+    from django.http import JsonResponse
+
+    return JsonResponse(
+        error_payload("internal_error", CODE_MESSAGES["internal_error"]),
+        status=500,
+    )
+
+
 __all__ = [
     "CODE_MESSAGES",
     "Conflict",
@@ -196,4 +216,6 @@ __all__ = [
     "drf_exception_handler",
     "drf_exceptions",
     "error_payload",
+    "handler404",
+    "handler500",
 ]
