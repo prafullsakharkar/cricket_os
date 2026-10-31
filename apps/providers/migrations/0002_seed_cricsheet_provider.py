@@ -32,7 +32,17 @@ def seed(apps, schema_editor) -> None:
 
 def unseed(apps, schema_editor) -> None:
     # Raw SQL (see venues.0002 unseed for why the ORM collector is avoided).
-    schema_editor.execute("DELETE FROM cricket.data_provider WHERE code = 'cricsheet'")
+    # Only remove the seed row while nothing references it: importer-created
+    # provider_entity_map rows PROTECT the provider, and the reverse of 0001
+    # (which drops the map table) runs *after* this migration on a full
+    # reverse plan, so an unconditional delete fails on an importer-populated
+    # DB. Leaving a referenced provider in place is the correct PROTECT
+    # semantics; the table drop in 0001's reverse clears it either way.
+    schema_editor.execute(
+        "DELETE FROM cricket.data_provider AS d WHERE d.code = 'cricsheet' "
+        "AND NOT EXISTS (SELECT 1 FROM cricket.provider_entity_map AS pem "
+        "WHERE pem.provider_id = d.id)"
+    )
 
 
 class Migration(migrations.Migration):

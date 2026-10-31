@@ -1,0 +1,18 @@
+# Dedicated gate for the identity engine's two pure/high-risk modules
+# (`make test-identity` / CI): 100% line AND branch.
+#
+# `include` (glob patterns) is used instead of `source` because coverage 7.x
+# treats a `source` entry ending in `.py` as a *package name* and reports
+# "never imported". `include` restricts measurement to exactly these files,
+# so the 100% fail-under applies to them and only them.
+
+[run]
+branch = true
+include =
+    */apps/players/identity_scoring.py
+    */apps/players/services/merge.py
+
+[report]
+fail_under = 100
+show_missing = true
+skip_covered = true

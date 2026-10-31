@@ -7,6 +7,8 @@ cannot disturb the session's migrated test database or other tests.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from django.apps import apps as django_apps
 from django.db import connection
@@ -136,6 +138,37 @@ def test_seed_migration_backward_removes_rows_and_forward_restores_them(
     # Forward to the seed migration again: the rows come back.
     _migrate([(app, seed_migration)])
     assert model.objects.count() == seed_count
+
+
+def test_full_cycle_on_importer_populated_db() -> None:
+    """Full reverse/reapply still works when map rows reference the seed provider.
+
+    The importer creates ``provider_entity_map`` rows pointing at the seeded
+    ``cricsheet`` provider (PROTECT FK). providers.0002's reverse deletes the
+    seed row *before* 0001's reverse drops the map table, so an unconditional
+    delete would raise IntegrityError on a populated DB (this is what the
+    "forward/backward on a DB populated by the importer fixture" requirement
+    guards). The unseed must only remove a referenced provider when nothing
+    references it.
+    """
+
+    DataProvider = django_apps.get_model("providers", "DataProvider")
+    ProviderEntityMap = django_apps.get_model("providers", "ProviderEntityMap")
+    provider = DataProvider.objects.get(code="cricsheet")
+    ProviderEntityMap.objects.create(
+        provider=provider,
+        entity_type="player",
+        internal_id=uuid4(),
+        provider_entity_id="opt-populated-1",
+    )
+
+    _migrate([(app, None) for app in PHASE_B_APPS])
+    _migrate(LEAVES)
+
+    # Re-applied state is clean: the seed row is back and the map table is
+    # re-created empty (the pre-reverse map row was dropped with its table).
+    assert django_apps.get_model("providers", "DataProvider").objects.get(code="cricsheet")
+    assert ProviderEntityMap.objects.filter(provider_entity_id="opt-populated-1").count() == 0
 
 
 def test_unapply_and_reapply_keeps_name_key_generated_column() -> None:

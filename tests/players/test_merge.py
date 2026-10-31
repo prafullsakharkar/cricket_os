@@ -174,6 +174,28 @@ class TestMergeRefusals:
         assert PlayerMerge.objects.count() == 2  # nothing new written
 
 
+class TestMergedByActor:
+    """``merged_by`` normalisation: UUID passthrough, UUID-string parse,
+    anything else stores a label only (``NULL``)."""
+
+    def test_uuid_actor_passes_through(self) -> None:
+        from uuid import UUID
+
+        winner = make_player(full_name="Virat Kohli")
+        loser = make_player(full_name="V Kohli")
+        actor = UUID("11111111-1111-4111-8111-111111111111")
+
+        merge = merge_players(winner, loser, actor=actor, reason="dup")
+        assert merge.merged_by == actor
+
+    def test_non_uuid_object_stores_null(self) -> None:
+        winner = make_player(full_name="Virat Kohli")
+        loser = make_player(full_name="V Kohli")
+
+        merge = merge_players(winner, loser, actor=object(), reason="dup")
+        assert merge.merged_by is None
+
+
 class TestMergeFailureAtomicity:
     def test_failed_reference_repaint_rolls_back(self, provider: DataProvider) -> None:
         # winner and loser are already in the SAME squad, so re-pointing the

@@ -131,27 +131,91 @@ building it.
 
 ---
 
-## Phase B — Reference data
+## Phase B — Reference data — **DONE (8 commits `b1693bb`…, branch `phase-b`)**
 
 **Goal:** countries, venues, teams, players, competitions, seasons — with the
 provider-identity mapping infrastructure.
 
-- **Tasks**
-  1. Models: `Country, GoverningBody, Venue, Ground, Team, Player,
-     TeamMembership, Squad, SquadMember, Competition, Season, Series,
-     MatchStage`, plus `DataProvider, ProviderEntityMap`.
-  2. Selectors + services per module (CRUD via ingestion, not public writes).
-  3. `identity_resolution` service (map provider id → internal uuid; create-if-missing).
-  4. Admin UI for stewards; duplicate-detection scoring.
-  5. Seed importer for the Cricsheet **people/venues register** (authorized open data).
-- **Tables/modules:** `venues, teams, players, competitions, providers`.
+Delivered as **8 reviewable group commits** on branch `phase-b`
+(Groups 1–8, `b1693bb`…). `make check` is green through the final
+commit: **613 suite tests + 172 scoring-engine tests** under three coverage
+gates — combined core + six Phase B apps **≥ 90% line+branch (94.5% at the
+last run)**, pure scoring engine **≥ 95% (99.1%)**, identity engine
+(`identity_scoring.py` + `services/merge.py`) **100% line+branch**.
+
+- **Tasks** (as delivered)
+  1. Models + migrations for `venues, teams, players, competitions, providers,
+     administration` — 19 tables with exact DDL parity (`name_key` IMMUTABLE
+     `GeneratedField`, `source_provider_id` plain UUID, soft-deletes, exact
+     constraint/index names, trigram GIN indexes).
+  2. Selectors + services per module (six-layer rule; CRUD via ingestion, not
+     public writes); generic `resolve()` in `providers/services.py` with
+     per-entity resolvers (team / venue / competition / series / player).
+  3. Identity resolution + merge: pure `identity_scoring.py`, duplicate-
+     candidate detection, steward merge service (re-point, idempotent,
+     cycle/self refusal, **no unmerge**, synchronous `player.merged` audit).
+  4. Admin UI + roles (`administration`): duplicate queue + Groups, four roles
+     with an exact `has_perm` matrix, confirm-flow merge action.
+  5. Cricsheet register importer (`import_cricsheet_register`): local-file
+     allowlist, fixtures ≤ 200 rows, per-input error CSV, dry-run; **30k-row
+     benchmark: 30000 created / 0 errors / 278.90 s (~108 rows/s) /
+     91.9 MiB peak RSS**.
+  6. Public read API — 10 GET endpoints under `/api/v1/`: `{"data","meta"}`
+     envelope, UTC timestamps, `?fields=` sparse fields, allow-listed
+     sorting, dual pagination (`/players`), trigram search, ETag/304, merge
+     `301`, JSON error catalog, and `/api/v1/schema` (drf-spectacular OpenAPI
+     3.0.3).
+- **Tables/modules:** `venues, teams, players, competitions, providers,
+  administration` (+ `core`).
 - **Endpoints:** `GET /teams`, `/teams/{id}`, `/players`, `/players/{id}`,
-  `/competitions`, `/series`.
-- **Tests:** model constraints; membership temporality; provider-map uniqueness;
-  name-search; identity-resolution create/merge.
-- **Acceptance:** reference data importable and browsable; player de-dup review flow works.
-- **Risks:** identity conflicts (mitigated by steward review). **Effort:** 25.
-- **DoD:** imports idempotent; endpoints documented and contract-tested.
+  `/competitions`, `/competitions/{id}`, `/series`, `/series/{id}`,
+  `/venues`, `/venues/{id}`, `/api/v1/schema`. (The roadmap's original list
+  omitted the venues and schema endpoints — both delivered.)
+- **Tests:** model constraints, membership temporality, provider-map
+  uniqueness, name search, resolve/merge, admin permissions, importer, and a
+  68-test API contract group (envelope, sparse fields, sorting, pagination,
+  cache/ETag/304/301, query ceilings, trigram SQL contract, golden payloads,
+  jsonschema-vs-OpenAPI payload validation, schemathesis smoke).
+- **Acceptance:** reference data importable (30k benchmark) and browsable via
+  the public API; steward de-dup review flow works. **DoD met.**
+- **Risks:** identity conflicts mitigated by steward review; **MFA for
+  `admin`/`data_steward` deferred to Phase G** (see ticket there). **Effort:**
+  25 planned; delivered within scope — two material scope additions (the
+  public reference API, Group 7; the 7-app coverage gate, Group 8) were offset
+  by reusing the Phase A+ scoring engine and importing the venues register from
+  a curated CSV rather than a live provider.
+
+### Phase B decisions (conflicts resolved — recorded in the final report)
+
+- **D1 — Timestamps.** Reference DDL lists no `created_at`/`updated_at` on
+  reference entities; DATABASE_SCHEMA wins ⇒ models carry exactly the DDL
+  columns (`TimeStampedModel`/`ProvenanceModel` only where the DDL declares the
+  fields).
+- **D2 — `source_provider_id`.** Plain `UUIDField(null=True)` on every model
+  that has it — DDL says `uuid`, not an FK, not a TextField.
+- **D3 — `FormatCatalogue` ownership.** Moved `matches` → `competitions`;
+  ARCHITECTURE updated in the same change; the seed matches the DDL exactly.
+- **D4 — Where `resolve()` lives.** Generic `resolve()` in
+  `providers/services.py` with a per-entity resolver registry (registered in
+  each app's `ready()`); the player resolver + scoring live in
+  `players/services/identity_resolution.py`; `players/identity_scoring.py`
+  stays pure.
+- **D5 — `merged_by`/`actor_id`.** Plain UUIDs (no user model until the auth
+  phase): the merge service takes `actor: UUID | str | None`; a UUID → stored
+  in `merged_by`, `str()` → `AuditLog.actor_label`, `actor_id` stays NULL.
+- **D6 — DoB-mismatch cap.** Both DoBs present and different ⇒ the DoB
+  feature scores 0 and the total caps at 0.25 (below both thresholds) — a
+  mismatched pair can never auto-link or auto-merge.
+- **D7 — `--names` variants.** The first variant sets `known_as` only when it
+  is blank; all variants are validated and counted (no alias table until
+  Phase F).
+- **D8 — OpenAPI/schemathesis.** schemathesis 4.32.7 runs on Python 3.14
+  (`get_all_operations()` now returns `Ok|Err` Results; the smoke test unwraps
+  them). The fallback that *did* materialise: drf-spectacular cannot
+  introspect the custom `{"data","meta"}` collection envelope and documents
+  the DRF default `{count, next, previous, results}` shape; the real envelope
+  is asserted in `test_reference_api.py` and payloads are validated against
+  the component schemas with jsonschema.
 
 ---
 
@@ -297,7 +361,9 @@ points tables, H2H, records, form.
   4. Observability (metrics, dashboards, alerts, runbooks).
   5. Backups + PITR + cross-region; quarterly restore drill runbook.
   6. Deployment pipeline (blue/green), migration gates, rollback drill.
-  7. Security review (RBAC, secrets, WAF, rate limits).
+  7. Security review (RBAC, secrets, WAF, rate limits); **enforce MFA for
+     `admin`/`data_steward`** (required by SECURITY_AND_RELIABILITY §1,
+     deferred from Phase B).
 - **Tables/modules:** infra + `administration`, all modules.
 - **Tests:** performance suite; migration tests; disaster-recovery drill;
   security checks.

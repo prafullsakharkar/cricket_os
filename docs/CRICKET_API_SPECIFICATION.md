@@ -292,6 +292,23 @@ domain (list + detail) under `/api/v1/`. All responses follow the §1 envelope
   id is a privileged operation and is **deferred to the auth phase** (Phase F);
   it will require an authenticated admin session, never a public key.
 
+### 3.11 `GET /api/v1/schema` — machine-readable API description
+
+- Serves the **OpenAPI 3.0.3** document for the whole `/api/v1/` surface
+  (drf-spectacular). Content negotiation: `application/json` (default
+  `application/vnd.oai.openapi`, YAML). Read-only, public, no auth.
+- The document declares every endpoint above with uuid-typed path parameters,
+  allow-listed query parameters, and component schemas for each entity.
+  **Known limitation (D8 fallback, recorded in the Phase B report):**
+  drf-spectacular cannot introspect the custom `{"data","meta"}` collection
+  envelope, so list responses are documented with the DRF default
+  `{count, next, previous, results}` shape — the real envelope is contract-
+  tested separately (tests/api/test_reference_api.py) and payloads are
+  validated against the component schemas with jsonschema.
+- `tests/api/test_schema_contract.py` runs a **schema contract**: the document
+  must parse (drf-spectacular's validator + schemathesis), declare every
+  endpoint, and every detail/list payload must satisfy its component schema.
+
 ---
 
 ## 4. Representative JSON responses
@@ -427,6 +444,10 @@ domain (list + detail) under `/api/v1/`. All responses follow the §1 envelope
   with RBAC roles (`viewer`, `operator`, `admin`, `data_steward`).
 - Public writes: **none**, except optional user fantasy-team creation in a future
   version, which would be a separate authenticated surface.
+- **Provider credentials are never exposed.** `data_provider.credential_ref` is
+  a server-side lookup handle and **never carries the secret itself**; no API
+  response or admin view renders credentials or their contents (see
+  CRICKET_SECURITY_AND_RELIABILITY §3).
 
 ## 7. Rate limiting & abuse prevention
 

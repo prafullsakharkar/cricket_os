@@ -131,13 +131,22 @@ jobs:
         run: uv python install 3.14
       - name: Install dependencies
         run: uv sync --frozen
-      - name: Tests with coverage gate (apps/core >= 90%)
+      - name: Tests with coverage gate (core + Phase B apps >= 90% line+branch)
         run: |
-          uv run pytest --cov=apps/core --cov-report=term-missing --cov-report=xml:coverage.xml
+          uv run pytest --cov=apps/core --cov=apps/venues --cov=apps/teams \
+            --cov=apps/players --cov=apps/competitions --cov=apps/providers \
+            --cov=apps/administration --cov-branch --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
       - name: Scoring coverage gate (apps/scoring >= 95% line+branch)
         run: |
           uv run pytest -o addopts="" tests/scoring -m "not benchmark" \
             --cov=apps/scoring --cov-branch --cov-report=term-missing --cov-fail-under=95
+      - name: Identity engine gate (identity_scoring + merge = 100% line+branch)
+        run: |
+          uv run pytest tests/players/test_identity_scoring.py \
+            tests/players/test_identity_scoring_properties.py \
+            tests/players/test_merge.py \
+            --cov-config=.coveragerc-identity --cov --cov-report=term-missing
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

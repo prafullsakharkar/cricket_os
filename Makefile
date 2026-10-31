@@ -5,7 +5,7 @@ MANAGE := $(UV) run python manage.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-nocov lint fmt typecheck imports check shell
+.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-identity test-nocov lint fmt typecheck imports check shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -35,12 +35,21 @@ run: ## Run the ASGI dev server (uvicorn)
 worker: ## Run a Celery worker
 	$(UV) run celery -A config.celery worker -l info
 
-test: ## Run the full test suite with coverage (apps/core >= 90%)
-	$(UV) run pytest --cov=apps/core --cov-report=term-missing --cov-report=xml:coverage.xml
+test: ## Run the full test suite with coverage (core + Phase B apps >= 90% line+branch)
+	$(UV) run pytest --cov=apps/core --cov=apps/venues --cov=apps/teams \
+		--cov=apps/players --cov=apps/competitions --cov=apps/providers \
+		--cov=apps/administration --cov-branch --cov-report=term-missing \
+		--cov-report=xml:coverage.xml
 
 test-scoring: ## Enforce >=95% line+branch coverage on the pure scoring engine
 	$(UV) run pytest -o addopts="" tests/scoring -m "not benchmark" \
 		--cov=apps/scoring --cov-branch --cov-report=term-missing --cov-fail-under=95
+
+test-identity: ## Enforce 100% line+branch on the identity engine (scoring + merge)
+	$(UV) run pytest tests/players/test_identity_scoring.py \
+		tests/players/test_identity_scoring_properties.py \
+		tests/players/test_merge.py \
+		--cov-config=.coveragerc-identity --cov --cov-report=term-missing
 
 test-nocov: ## Run tests without the coverage gate (fast inner loop)
 	$(UV) run pytest
@@ -59,7 +68,7 @@ typecheck: ## Static type check (mypy)
 imports: ## Enforce import boundaries (import-linter)
 	$(UV) run lint-imports
 
-check: lint typecheck imports test test-scoring ## Everything CI enforces
+check: lint typecheck imports test test-scoring test-identity ## Everything CI enforces
 
 shell: ## Django shell
 	$(MANAGE) shell

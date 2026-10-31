@@ -61,9 +61,20 @@ markers = [
 ]
 
 [tool.coverage.run]
-# Default gate covers apps/core (>= 90%). apps/scoring has its own stricter
-# gate (>= 95% line + branch) run by `make test-scoring` / CI.
-source = ["apps/core"]
+# Default gate: apps/core + the six Phase B reference-data apps, combined
+# >= 90% line + branch (`make test` / CI). apps/scoring has its own stricter
+# gate (>= 95% line + branch) run by `make test-scoring`, and the identity
+# engine (identity_scoring.py + services/merge.py) has a 100% line+branch
+# gate run by `make test-identity` (see .coveragerc-identity).
+source = [
+  "apps/core",
+  "apps/venues",
+  "apps/teams",
+  "apps/players",
+  "apps/competitions",
+  "apps/providers",
+  "apps/administration",
+]
 branch = true
 
 [tool.coverage.report]
