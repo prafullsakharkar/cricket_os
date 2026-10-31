@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>Are you sure you want to {{ description }}?</p>
+<form method="post">
+  {% csrf_token %}
+  <table>
+    <thead>
+      <tr>
+        <th>Candidate</th>
+        <th>Canonical</th>
+        <th>Score</th>
+        <th>Feature breakdown</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.candidate }}</td>
+        <td>{{ row.canonical }}</td>
+        <td>{{ row.score }}</td>
+        <td>
+          {% for feature, entry in row.breakdown.items %}
+            {% if feature != "cap" %}
+            <div>
+              <strong>{{ feature }}</strong>:
+              score {{ entry.score|floatformat:3 }}
+              (weight {{ entry.weight }})
+            </div>
+            {% endif %}
+          {% endfor %}
+          {% if row.breakdown.cap.applied %}
+          <div><em>DoB-mismatch cap applied ({{ row.breakdown.cap.max_total }})</em></div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% for obj in queryset %}
+  <input type="hidden" name="_selected_action" value="{{ obj.pk }}" />
+  {% endfor %}
+  <input type="hidden" name="action" value="{{ action }}" />
+  <input type="submit" name="confirm" value="Confirm" />
+  <a href="{% url 'admin:players_playerduplicatecandidate_changelist' %}" class="button cancel-link">No, take me back</a>
+</form>
+{% endblock %}

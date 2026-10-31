@@ -30,7 +30,7 @@ LEAVES = [
     ("players", "0002_initial"),
     ("competitions", "0002_seed_format_catalogue"),
     ("providers", "0002_seed_cricsheet_provider"),
-    ("administration", "0001_initial"),
+    ("administration", "0002_seed_groups"),
 ]
 
 #: The 19 reference-data tables (ci/schema_drift_scope.txt).
@@ -117,6 +117,7 @@ def test_full_cycle_unapply_reapply_is_symmetric() -> None:
         ("venues", "0002_seed_countries_governing_bodies", "venues.GoverningBody", 13),
         ("competitions", "0002_seed_format_catalogue", "competitions.FormatCatalogue", 9),
         ("providers", "0002_seed_cricsheet_provider", "providers.DataProvider", 1),
+        ("administration", "0002_seed_groups", "auth.Group", 4),
     ],
 )
 def test_seed_migration_backward_removes_rows_and_forward_restores_them(

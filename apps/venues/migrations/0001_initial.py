@@ -12,7 +12,12 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = []
+    # core/0001 creates the `cricket` schema and the pg_trgm / btree_gin
+    # extensions; every later Phase B table with a trigram/gin index needs
+    # them, so the whole reference-data tree depends on it.
+    dependencies = [
+        ("core", "0001_initial"),
+    ]
 
     operations = [
         migrations.CreateModel(
