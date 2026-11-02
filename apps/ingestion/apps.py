@@ -17,6 +17,6 @@ class IngestionConfig(AppConfig):
         # repeated ready() calls (tests) do not re-import.
         if getattr(self, "_ready_done", False):
             return
-        from apps.ingestion.adapters import cricsheet  # noqa: F401
+        from apps.ingestion.adapters import cricsheet, summary_cards  # noqa: F401
 
         self._ready_done = True

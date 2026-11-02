@@ -32,7 +32,6 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.enums import TeamType
 from apps.deliveries.services.validation import DeliveryDraft
 from apps.deliveries.services.write import append_or_revise
 from apps.ingestion.adapters.cricsheet_parse import (
@@ -42,6 +41,7 @@ from apps.ingestion.adapters.cricsheet_parse import (
     parse_cricsheet_yaml,
     sha256_of,
 )
+from apps.ingestion.adapters.identity import upsert_player, upsert_team
 from apps.ingestion.models import ImportJob
 from apps.ingestion.services.jobs import record_error
 from apps.ingestion.services.pipeline import (
@@ -53,11 +53,7 @@ from apps.ingestion.services.pipeline import (
 )
 from apps.innings.models import Innings, InningsSummary
 from apps.matches.models import Match, MatchTeam, Toss
-from apps.players.identity_scoring import normalize_name
-from apps.players.services.players import upsert_player
 from apps.scorecards.services.rebuild import rebuild_match
-from apps.teams.models import Team
-from apps.teams.services.teams import upsert_team
 
 #: The pipeline name this adapter registers (used by commands/tasks).
 PIPELINE_NAME = "cricsheet"
@@ -70,45 +66,17 @@ _UTC = datetime.UTC
 # --------------------------------------------------------------------------- #
 
 
-def _registry_identifier(registry: dict[str, dict[str, str]], name: str) -> str | None:
-    """First non-empty registry id (key_pulse/key_opta/…) for ``name``."""
-    for value in (registry.get(name) or {}).values():
-        if value:
-            return value
-    return None
-
-
-def _team_type(match_type: str, gender: str) -> str:
-    if match_type in ("TEST", "ODI", "T20I"):
-        return TeamType.WOMEN_INTERNATIONAL if gender == "W" else TeamType.INTERNATIONAL
-    # TeamType has no women's "domestic" label — WOMEN_FRANCHISE is the only
-    # women's non-international option (matches the schema §3.2 catalogue).
-    return TeamType.WOMEN_FRANCHISE if gender == "W" else TeamType.DOMESTIC
-
-
-def _upsert_team(provider: Any, parsed: CricsheetMatch, name: str) -> Team:
-    identifier = _registry_identifier(parsed.team_registry, name) or normalize_name(name)
-    return upsert_team(
-        provider,
-        identifier,
-        name=name,
-        team_type=_team_type(parsed.match_type, parsed.gender),
-        gender=parsed.gender,
-        is_international=parsed.match_type in ("TEST", "ODI", "T20I"),
-    )
-
-
-def _upsert_player(provider: Any, parsed: CricsheetMatch, name: str) -> UUID:
-    identifier = _registry_identifier(parsed.player_registry, name) or normalize_name(name)
-    return upsert_player(provider, identifier, full_name=name, gender=parsed.gender).pk
-
-
 def _player_map(provider: Any, parsed: CricsheetMatch) -> dict[str, UUID]:
     """Cricsheet name -> internal player UUID (all named players)."""
     mapping: dict[str, UUID] = {}
     for names in parsed.players_by_team.values():
         for name in names:
-            mapping[name] = _upsert_player(provider, parsed, name)
+            mapping[name] = upsert_player(
+                provider,
+                name=name,
+                registry=parsed.player_registry,
+                gender=parsed.gender,
+            )
     return mapping
 
 
@@ -146,7 +114,13 @@ def _upsert_match(provider: Any, parsed: CricsheetMatch) -> Match:
         Match.objects.filter(id=match.id).update(**updates)
 
     for number, name in enumerate(parsed.teams, start=1):
-        team = _upsert_team(provider, parsed, name)
+        team = upsert_team(
+            provider,
+            name=name,
+            registry=parsed.team_registry,
+            match_type=parsed.match_type,
+            gender=parsed.gender,
+        )
         MatchTeam.objects.get_or_create(match=match, team=team, defaults={"team_number": number})
     return match
 
@@ -282,13 +256,17 @@ def build_cricsheet_pipeline(factory_args: dict[str, Any]) -> PipelineSpec:
         job_type="cricsheet",
         idempotency_key=f"cricsheet:{match_id}:{content_sha256}",
         scope={"match_id": match_id, "file": str(path)},
-        stages=[_parse_and_ingest_stage(path)],
+        stages=[_parse_and_ingest_stage(path, dry_run=bool(factory_args.get("dry_run", False)))],
         checkpoint_scope=f"cricsheet:{match_id}",
     )
 
 
-def _parse_and_ingest_stage(path: Any) -> Callable[[IngestContext], StageResult]:
-    """Parse the file then run the ingest stage (parse failures are permanent)."""
+def _parse_and_ingest_stage(path: Any, *, dry_run: bool) -> Callable[[IngestContext], StageResult]:
+    """Parse the file then run the ingest stage (parse failures are permanent).
+
+    ``dry_run`` parses + validates only: nothing is written and the job records
+    zero records (the management command's ``--dry-run`` contract).
+    """
 
     def stage(ctx: IngestContext) -> StageResult:
         try:
@@ -300,6 +278,9 @@ def _parse_and_ingest_stage(path: Any) -> Callable[[IngestContext], StageResult]
                 error_class="CricsheetParseError",
                 payload={"file": str(path)},
             ) from exc
+        if dry_run:
+            total = sum(len(i.deliveries) for i in parsed.innings)
+            return StageResult(read=total, written=0)
         return _ingest_stage(parsed)(ctx)
 
     return stage
