@@ -20,6 +20,7 @@ urlpatterns: list[Any] = [
     path("api/v1/", include("apps.teams.api.urls")),
     path("api/v1/", include("apps.players.api.urls")),
     path("api/v1/", include("apps.competitions.api.urls")),
+    path("api/v1/", include("apps.matches.api.urls")),
 ]
 
 # OpenAPI schema (drf-spectacular) feeds the contract tests; dev/test only.
