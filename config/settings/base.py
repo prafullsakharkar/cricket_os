@@ -194,7 +194,8 @@ CELERY_TASK_ANNOTATIONS = {
         "retry_backoff": True,
         "retry_backoff_max": 600,
         "retry_jitter": True,
-        "max_retries": 5,
+        # Bounded attempts for transient failures (DATA_INGESTION §4.3).
+        "max_retries": 8,
     }
 }
 

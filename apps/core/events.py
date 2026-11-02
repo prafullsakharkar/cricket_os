@@ -34,6 +34,10 @@ TOPIC_SCORECARD_UPDATED = "scorecard.updated"
 TOPIC_MATCH_COMPLETED = "match.completed"
 #: Tier-2: a data correction was applied to a completed match.
 TOPIC_CORRECTION_APPLIED = "correction.applied"
+#: Ingestion: an ImportJob completed (succeeded or partial); checkpoint advanced.
+TOPIC_INGESTION_COMPLETED = "ingestion.completed"
+#: Ingestion: an ImportJob failed permanently (a DLQ row was written).
+TOPIC_INGESTION_FAILED = "ingestion.failed"
 
 _handlers: dict[str, list[Callable[[Any], None]]] = {}
 
@@ -72,6 +76,8 @@ __all__ = [
     "TOPIC_DELIVERY_APPENDED",
     "TOPIC_DELIVERY_CORRECTED",
     "TOPIC_DUPLICATE_REVIEWED",
+    "TOPIC_INGESTION_COMPLETED",
+    "TOPIC_INGESTION_FAILED",
     "TOPIC_MATCH_COMPLETED",
     "TOPIC_PLAYER_MERGED",
     "TOPIC_PROVIDER_MAP_VERIFIED",
