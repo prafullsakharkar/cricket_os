@@ -10,3 +10,13 @@ class IngestionConfig(AppConfig):
     label = "ingestion"
     verbose_name = "ingestion"
     default_auto_field = "django.db.models.UUIDField"
+
+    def ready(self) -> None:
+        # Import the provider adapters so their pipeline factories are
+        # registered for the management commands and Celery tasks. Guarded so
+        # repeated ready() calls (tests) do not re-import.
+        if getattr(self, "_ready_done", False):
+            return
+        from apps.ingestion.adapters import cricsheet  # noqa: F401
+
+        self._ready_done = True
