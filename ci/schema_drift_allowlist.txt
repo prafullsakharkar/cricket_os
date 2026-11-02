@@ -18,6 +18,8 @@ col|player|gender|character(1)|NOT NULL|plain
 col|player|gender|character varying(1)|NOT NULL|plain
 col|team|gender|character(1)|NOT NULL|plain
 col|team|gender|character varying(1)|NOT NULL|plain
+col|match|gender|character(1)|NOT NULL|plain
+col|match|gender|character varying(1)|NOT NULL|plain
 #
 # Category 2 — trigram opclass schema qualification. The reference DDL writes
 # `gin_trgm_ops`; Django emits `cricket.gin_trgm_ops` because the extension
@@ -31,5 +33,7 @@ idx|team|CREATE INDEX ON cricket.team USING gin (name cricket.gin_trgm_ops)
 # Category 3 — auto LIKE index. Django adds a `*_pattern_ops` btree index for
 # every db_index'd varchar/text column (postgresql/schema.py, LIKE lookups
 # outside the C locale). The reference DDL does not declare one for the
-# format_catalogue PK; the index is a harmless query-planning aid.
+# format_catalogue PK or import_job.idempotency_key (unique=True implies
+# db_index at the SQL level); the indexes are harmless query-planning aids.
 idx|format_catalogue|CREATE INDEX ON cricket.format_catalogue USING btree (format text_pattern_ops)
+idx|import_job|CREATE INDEX ON cricket.import_job USING btree (idempotency_key text_pattern_ops)

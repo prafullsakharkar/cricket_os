@@ -72,6 +72,13 @@ LOCAL_APPS = [
     "apps.competitions",
     "apps.providers",
     "apps.administration",
+    "apps.matches",
+    "apps.innings",
+    "apps.deliveries",
+    "apps.scorecards",
+    "apps.statistics",
+    "apps.ingestion",
+    "apps.synchronization",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -44,11 +44,15 @@ BEGIN
   END IF;
 
   -- 5. Core tables introduced by the doc fixes exist
+  -- NOTE: match_event_log (per-match realtime replay stream, §3.6) is
+  -- deliberately excluded here: it belongs to the `realtime` module, which is
+  -- out of scope for Phase C (WebSocket/SSE live fan-out, Phase E). The table
+  -- is added together with the realtime module.
   IF (SELECT count(*) FROM information_schema.tables
        WHERE table_schema = 'cricket'
          AND table_name IN ('ground','format_catalogue','squad','squad_member',
                             'match_result','match_award','player_merge',
-                            'audit_log','match_event_log')) <> 9 THEN
+                            'audit_log')) <> 8 THEN
     RAISE EXCEPTION 'one or more tables added in the doc fixes are missing';
   END IF;
 END
