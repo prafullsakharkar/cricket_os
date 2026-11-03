@@ -233,8 +233,9 @@ Each app gets `apps.py` with `default_auto_field = "django.db.models.UUIDField"`
       expression=Concat(
           Lower(F("full_name")),
           Value("|"),
-          Coalesce(Cast(F("date_of_birth") - Value(datetime.date(1, 1, 1)),
-                         models.TextField()), Value("")),
+          Coalesce(
+              Cast(F("date_of_birth") - Value(datetime.date(1, 1, 1)), models.TextField()), Value("")
+          ),
       ),
       output_field=models.TextField(),
       db_persist=True,

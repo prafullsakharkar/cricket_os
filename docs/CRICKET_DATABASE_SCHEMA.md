@@ -567,6 +567,7 @@ CREATE TABLE cricket.match (
   source_timezone    text,
   status             cricket.match_status NOT NULL DEFAULT 'SCHEDULED',
   status_detail      text,
+  state_title        text,
   result_type        cricket.result_type,
   result_text        text,
   toss_winner_team_id uuid REFERENCES cricket.team(id),
@@ -581,6 +582,7 @@ CREATE TABLE cricket.match (
   source_provider_id uuid,
   provider_updated_at timestamptz,
   ingested_at        timestamptz NOT NULL DEFAULT now(),
+  last_ingested_at   timestamptz,
   revision           integer NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX ux_match_provider

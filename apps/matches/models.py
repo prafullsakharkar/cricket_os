@@ -85,6 +85,8 @@ class Match(UUIDPrimaryKeyModel):
     source_timezone = models.TextField(null=True, blank=True)
     status = models.TextField(choices=MatchStatus.choices, default=MatchStatus.SCHEDULED)
     status_detail = models.TextField(null=True, blank=True)
+    #: Human-readable position in the match calendar/session ("Day 4 - Tea").
+    state_title = models.TextField(null=True, blank=True)
     result_type = models.TextField(choices=ResultType.choices, null=True, blank=True)
     result_text = models.TextField(null=True, blank=True)
     toss_winner_team = models.ForeignKey(
@@ -113,6 +115,9 @@ class Match(UUIDPrimaryKeyModel):
     source_provider_id = models.UUIDField(null=True, blank=True)
     provider_updated_at = models.DateTimeField(null=True, blank=True)
     ingested_at = models.DateTimeField(default=models.functions.Now)
+    #: Last time live ingestion committed a change for this match. Drives
+    #: ``meta.stale`` on read responses (API_SPECIFICATION §3.1/§3.9).
+    last_ingested_at = models.DateTimeField(null=True, blank=True)
     revision = models.IntegerField(default=1)
 
     class Meta:
