@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -136,11 +137,11 @@ def append_events(
                 "created_at": row.created_at.isoformat(),
                 **row.payload,
             }
-            transaction.on_commit(
-                lambda event=event, match_id=match_id: publication.publish_match_event(
-                    match_id, event
-                )
-            )
+
+            def _publish(event: dict[str, Any] = event, match_id: Any = match_id) -> None:
+                publication.publish_match_event(match_id, event)
+
+            transaction.on_commit(_publish)
     return rows
 
 
@@ -188,7 +189,7 @@ def events_since(match_id: Any, last_seq: int) -> EventsSince:
     return EventsSince(events=[_event_dict(row) for row in rows])
 
 
-def _event_dict(row: dict[str, Any]) -> dict[str, Any]:
+def _event_dict(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "seq": row["seq"],
         "event_type": row["event_type"],

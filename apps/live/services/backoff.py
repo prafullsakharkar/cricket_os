@@ -40,7 +40,10 @@ def compute_backoff(
     if retry_after is not None:
         return max(0, int(retry_after))
     policy = policy or BackoffPolicy()
-    base = min(policy.base_seconds * (2 ** max(0, attempt)), policy.max_seconds)
+    # ``2 ** max(0, attempt)`` is typed as ``Any`` by mypy's int-pow special
+    # case, so pin the schedule to ``int`` explicitly.
+    exponent = max(0, attempt)
+    base: int = min(policy.base_seconds * (2**exponent), policy.max_seconds)
     if not policy.jitter:
         return base
     return base + random.randint(0, max(0, policy.base_seconds - 1))

@@ -194,7 +194,7 @@ def match_shell(match: Match) -> dict[str, Any]:
     innings = list(_innings_queryset(match))
     # Reverse one-to-one: fetch summaries by id rather than relying on
     # ``select_related`` descriptor semantics (absent rows raise otherwise).
-    summaries = {
+    summaries: dict[Any, InningsSummary | None] = {
         row.innings_id: row
         for row in InningsSummary.objects.filter(innings__in=[i.id for i in innings])
     }
@@ -641,7 +641,7 @@ def match_summaries(
     for db_innings in Innings.objects.filter(match_id__in=ids).order_by("match_id", *_ORDER):
         innings_by_match.setdefault(db_innings.match_id, []).append(db_innings)
 
-    summaries = {
+    summaries: dict[Any, InningsSummary | None] = {
         row.innings_id: row for row in InningsSummary.objects.filter(innings__match_id__in=ids)
     }
     results = {
@@ -654,7 +654,11 @@ def match_summaries(
     }
 
     provider_ids = {m.source_provider_id for m in matches if m.source_provider_id}
-    code_by_id = dict(DataProvider.objects.filter(id__in=provider_ids).values_list("id", "code"))
+    # Keyed by UUID but looked up with ``match.source_provider_id`` (UUID | None):
+    # a None key simply misses and the item renders with ``source=None``.
+    code_by_id: dict[Any, str] = dict(
+        DataProvider.objects.filter(id__in=provider_ids).values_list("id", "code")
+    )
 
     items: list[dict[str, Any]] = []
     for match in matches:

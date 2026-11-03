@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
+from collections.abc import Sequence
 from typing import Any, ClassVar
 
 from django.conf import settings
@@ -79,7 +80,10 @@ def _rate_limited(ip: str, *, limit: int = 60, window: int = 60) -> bool:
 class LivePushReceiverView(View):
     """POST /ingest/live/push — authenticates and enqueues a live payload."""
 
-    http_method_names: ClassVar[list[str]] = ["post"]
+    # Matches django-stubs' View.http_method_names (an instance attribute), so
+    # this is a plain override, not a ClassVar. A tuple keeps ruff's RUF012
+    # (mutable class default) happy and works identically in View.as_view().
+    http_method_names: Sequence[str] = ("post",)
 
     #: Overridable in tests; production uses the Celery task.
     enqueue: ClassVar[Any] = None

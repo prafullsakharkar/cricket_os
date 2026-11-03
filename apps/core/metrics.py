@@ -17,7 +17,7 @@ from collections import defaultdict
 from typing import Any
 
 try:  # pragma: no cover - exercised through the fallback in this image
-    import prometheus_client as _prom
+    import prometheus_client as _prom  # type: ignore[import-not-found]
 
     _HAS_PROM = True
 except ImportError:  # pragma: no cover - depends on the environment
@@ -134,7 +134,7 @@ def reset() -> None:
 def render() -> str:
     """Render the Prometheus text exposition format (internal ``/metrics``)."""
     if _HAS_PROM:
-        return _prom.generate_latest().decode("utf-8")  # pragma: no cover
+        return str(_prom.generate_latest().decode("utf-8"))  # pragma: no cover
     lines: list[str] = []
     for name, kind in sorted(_KINDS.items()):
         lines.append(f"# HELP {name} {_HELP.get(name, '')}")

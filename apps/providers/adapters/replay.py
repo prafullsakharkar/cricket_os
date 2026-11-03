@@ -256,7 +256,7 @@ class ReplayAdapter:
             return self._to_batches(batches)
 
         rows = self._apply_reorder(rows)
-        batches: dict[int, list[Any]] = {}
+        page_batches: dict[int, list[Any]] = {}
         for innings_number, seq, delivery in rows:
             if seq in set(self.faults.dropped):
                 continue
@@ -270,8 +270,8 @@ class ReplayAdapter:
             draft = self._draft_for(delivery, seq)
             if seq in set(self.faults.malformed):
                 draft = self._malformed(draft)
-            batches.setdefault(innings_number, []).append(draft)
-        return self._to_batches(batches)
+            page_batches.setdefault(innings_number, []).append(draft)
+        return self._to_batches(page_batches)
 
     def get_commentary(self, provider_match_id: str) -> Iterable[Any]:
         return []
