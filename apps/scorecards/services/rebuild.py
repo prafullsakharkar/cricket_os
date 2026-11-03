@@ -303,6 +303,20 @@ def compute_scorecard(match: Match) -> MatchScorecard:
     return scoring_engine.rebuild_match(_match_context(match), contexts, config)
 
 
+def verify_innings(innings: Innings) -> bool:
+    """True when the persisted Tier-1 rows equal a fresh engine rebuild.
+
+    Used by the live path's shadow verification. Summary-only innings carry
+    provider-written rows and are authoritative, so they always verify.
+    """
+    context = build_innings_context(innings)
+    if context is None:
+        return True
+    match = innings.match
+    result = scoring_engine.rebuild_innings(context, preset_for_format(_format_for(match)))
+    return digest(_state_from_db(innings)) == digest(_state_from_result(innings, result))
+
+
 # --------------------------------------------------------------------------- #
 # Derived-state serialisation (engine output vs stored rows)
 # --------------------------------------------------------------------------- #

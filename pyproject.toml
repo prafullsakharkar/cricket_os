@@ -84,6 +84,7 @@ source = [
   "apps/statistics",
   "apps/ingestion",
   "apps/synchronization",
+  "apps/live",
 ]
 branch = true
 

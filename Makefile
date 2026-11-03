@@ -40,7 +40,7 @@ test: ## Run the full test suite with coverage (core + Phase B + Phase C apps >=
 		--cov=apps/players --cov=apps/competitions --cov=apps/providers \
 		--cov=apps/administration --cov=apps/matches --cov=apps/innings \
 		--cov=apps/deliveries --cov=apps/scorecards --cov=apps/statistics \
-		--cov=apps/ingestion --cov=apps/synchronization --cov-branch \
+		--cov=apps/ingestion --cov=apps/synchronization --cov=apps/live --cov-branch \
 		--cov-report=term-missing --cov-report=xml:coverage.xml
 
 test-phasec: ## Enforce >=95% line+branch on the write path + rebuild + Cricsheet mapper

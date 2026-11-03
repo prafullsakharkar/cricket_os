@@ -47,6 +47,16 @@ def _lock(match_id: Any) -> None:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [advisory_key(match_id)])
 
 
+def lock_match(match_id: Any) -> None:
+    """Public name for the per-match advisory transaction lock.
+
+    Live writes take it once and then call :func:`append_event` re-entrantly
+    (Postgres advisory locks stack per session), so the whole batch — delivery
+    rows, rebuild, state change and event log — serialises per match.
+    """
+    _lock(match_id)
+
+
 def _next_seq(match_id: Any) -> int:
     current = (
         MatchEventLog.objects.filter(match_id=match_id)
@@ -228,5 +238,6 @@ __all__ = [
     "append_event",
     "append_events",
     "events_since",
+    "lock_match",
     "prune_events",
 ]
