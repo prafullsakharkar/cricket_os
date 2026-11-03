@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from django.conf import settings
+
 from config.celery import app
 
 
@@ -64,6 +66,40 @@ def dispatch_polling_task() -> list[dict[str, Any]]:
         }
         for r in reports
     ]
+
+
+@app.task(name="live.sync_fixtures", autoretry_for=())  # type: ignore[untyped-decorator]
+def sync_fixtures_task(provider_id: str | None = None, days: int = 7) -> list[dict[str, Any]]:
+    """Sync the upcoming fixture window for active providers (beat schedule).
+
+    A no-op when ``LIVE_INGESTION_ENABLED`` is off. Each provider's adapter
+    ``list_fixtures`` result is folded idempotently; rejected records land on
+    the redacted ``IngestionError`` DLQ (``stage=fixture_sync``).
+    """
+    if not getattr(settings, "LIVE_INGESTION_ENABLED", False):
+        return []
+    from apps.live.services.fixture_sync import run_fixture_sync
+    from apps.providers.models import DataProvider
+
+    providers = DataProvider.objects.filter(is_active=True)
+    if provider_id:
+        providers = providers.filter(id=provider_id)
+    reports: list[dict[str, Any]] = []
+    for provider in providers:
+        report = run_fixture_sync(provider, days=days)
+        reports.append(
+            {
+                "provider": provider.code,
+                "created": report.created,
+                "updated": report.updated,
+                "rescheduled": report.rescheduled,
+                "cancelled": report.cancelled,
+                "unchanged": report.unchanged,
+                "skipped": report.skipped,
+                "errors": report.errors,
+            }
+        )
+    return reports
 
 
 @app.task(name="live.receive_push", autoretry_for=())  # type: ignore[untyped-decorator]
@@ -131,4 +167,4 @@ def _noop_fetcher(match: Any, since_seq: int | None) -> list[Any]:  # pragma: no
     return []
 
 
-__all__ = ["dispatch_polling_task", "poll_live_match_task", "receive_push"]
+__all__ = ["dispatch_polling_task", "poll_live_match_task", "receive_push", "sync_fixtures_task"]
