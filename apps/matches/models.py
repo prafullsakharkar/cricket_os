@@ -149,6 +149,40 @@ class Match(UUIDPrimaryKeyModel):
         return f"{self.format_type} {self.source_local_date} {self.id}"
 
 
+class MatchEventLog(UUIDPrimaryKeyModel):
+    """Append-only per-match realtime event stream (DOMAIN_MODEL §3.12).
+
+    ``seq`` is a monotonic **per-match** sequence allocated under a Postgres
+    advisory transaction lock (``events_log.append_event``), so concurrent
+    appends are gapless and a rollback leaves neither an event nor a gap.
+    The log is operational/derived: canonical data remains replayable from
+    deliveries, and rows are pruned after the post-completion retention window.
+    """
+
+    match = models.ForeignKey(
+        "matches.Match",
+        on_delete=models.PROTECT,
+        related_name="event_log",
+        db_index=False,
+    )
+    seq = models.BigIntegerField()
+    event_type = models.TextField()
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(default=models.functions.Now)
+
+    class Meta:
+        db_table = "match_event_log"
+        constraints = [
+            models.UniqueConstraint(fields=["match_id", "seq"], name="ux_match_event_seq"),
+        ]
+        indexes = [
+            models.Index(fields=["match_id", "seq"], name="ix_match_event_log"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.match_id}#{self.seq} {self.event_type}"
+
+
 class MatchTeam(UUIDPrimaryKeyModel):
     match = models.ForeignKey(
         "matches.Match",

@@ -222,6 +222,7 @@ def transition(
     extra_fields: dict[str, Any] | None = None,
     reopen: bool = False,
     source: Any = None,
+    emit_event: bool = True,
 ) -> TransitionResult:
     """Move ``match`` to ``to_status`` under the transition table.
 
@@ -264,16 +265,22 @@ def transition(
         )
     with transaction.atomic():
         Match.objects.filter(id=match.id).update(**updates)
+        match.refresh_from_db()
+        payload = {
+            "from": previous,
+            "to": to_status,
+            "state_title": match.state_title,
+            "status_detail": match.status_detail,
+            "reopened": reopened,
+            "source": getattr(source, "code", None),
+        }
+        if emit_event:
+            from apps.matches import event_schemas
+            from apps.matches.services import event_log
+
+            event_log.append_event(match.id, event_schemas.MATCH_STATE_CHANGED, payload)
     match.refresh_from_db()
-    payload = {
-        "match_id": str(match.id),
-        "from": previous,
-        "to": to_status,
-        "state_title": match.state_title,
-        "status_detail": match.status_detail,
-        "reopened": reopened,
-        "source": getattr(source, "code", None),
-    }
+    payload = {"match_id": str(match.id), **payload}
     return TransitionResult(
         match=match,
         previous_status=previous,
