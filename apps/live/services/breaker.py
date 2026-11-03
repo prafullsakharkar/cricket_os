@@ -161,6 +161,38 @@ class CircuitBreaker:
             self._transition(CircuitState.CLOSED)
 
 
+#: Registry of live breakers keyed by ``(provider_code, endpoint)`` so the
+#: read API can observe breaker state and serve last-known-good with
+#: ``meta.stale=true`` (SECURITY §8: a provider failure never blocks reads).
+#: The registry is write-mostly; readers call :func:`is_open_for` per page.
+_registry: dict[tuple[str, str], CircuitBreaker] = {}
+_registry_lock = threading.Lock()
+
+
+def register_breaker(provider: str, endpoint: str, breaker: CircuitBreaker) -> None:
+    """Publish ``breaker`` for readers to observe (keyed by provider code)."""
+    with _registry_lock:
+        _registry[(provider, endpoint)] = breaker
+
+
+def is_open_for(provider: str) -> bool:
+    """True when any registered breaker for ``provider`` is currently OPEN.
+
+    Unknown providers (no breaker registered yet) read as ``False`` — live
+    ingestion never ran, so nothing is known to be failing. Reading ``state``
+    also lets an expired OPEN breaker transition to HALF_OPEN naturally.
+    """
+    with _registry_lock:
+        candidates = [b for (p, _), b in _registry.items() if p == provider]
+    return any(b.state_code() == STATE_OPEN for b in candidates)
+
+
+def reset_breakers() -> None:
+    """Forget all registered breakers (test isolation hook)."""
+    with _registry_lock:
+        _registry.clear()
+
+
 def _monotonic() -> float:
     import time
 
@@ -175,4 +207,7 @@ __all__ = [
     "CircuitBreaker",
     "CircuitOpenError",
     "CircuitState",
+    "is_open_for",
+    "register_breaker",
+    "reset_breakers",
 ]

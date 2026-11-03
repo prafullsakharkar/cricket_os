@@ -28,7 +28,7 @@ from django.conf import settings
 from django.core.cache import cache as default_cache
 
 from apps.core.enums import MatchStatus
-from apps.live.services.breaker import CircuitBreaker, CircuitOpenError
+from apps.live.services.breaker import CircuitBreaker, CircuitOpenError, register_breaker
 from apps.matches.models import Match
 from apps.synchronization.services.sync import get_checkpoint
 
@@ -101,6 +101,14 @@ class PollReport:
     cadence_seconds: int = 0
 
 
+def _register_breaker(provider: Any, breaker: CircuitBreaker) -> None:
+    """Publish the breaker so readers can mark ``meta.stale`` (best-effort)."""
+    if provider is None:
+        return
+    code = getattr(provider, "code", None) or str(provider)
+    register_breaker(code, "poll", breaker)
+
+
 def poll_live_match(
     match: Match,
     *,
@@ -110,6 +118,8 @@ def poll_live_match(
     breaker: CircuitBreaker | None = None,
 ) -> PollReport:
     """One poll cycle for ``match``; returns a report, never raises."""
+    if breaker is not None:
+        _register_breaker(provider, breaker)
     if not acquire_poll_lock(match.id):
         return PollReport(match_id=str(match.id), polled=False, skipped_reason="locked")
 

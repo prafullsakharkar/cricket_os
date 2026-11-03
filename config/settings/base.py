@@ -283,6 +283,11 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.CursorPagination",
     "PAGE_SIZE": 25,
+    # DRF reserves `?format=` (URL_FORMAT_OVERRIDE) for renderer selection,
+    # but the public API documents `format` as a match filter (API_SPEC §3.1).
+    # Move the renderer override to a non-colliding query param; renderer
+    # choice stays on the Accept header in practice.
+    "URL_FORMAT_OVERRIDE": "renderer",
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_THROTTLE_CLASSES": [

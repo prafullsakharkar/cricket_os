@@ -20,20 +20,45 @@ standard envelope and cache headers.
 from __future__ import annotations
 
 import datetime
+from collections.abc import Iterable, Sequence
 from typing import Any
 from uuid import UUID
 
+from django.utils import timezone
+
+from apps.core.enums import MatchStatus
 from apps.core.errors import NotFound
 from apps.deliveries.models import Delivery
 from apps.innings.models import Innings, InningsEvent, InningsSummary
-from apps.matches.models import Match, MatchResult, Toss
+from apps.matches.models import Match, MatchResult, MatchTeam, Toss
 from apps.players.models import Player
+from apps.providers.licensing import attribution_for, license_meta
+from apps.providers.models import DataProvider
 from apps.scorecards.models import BattingEntry, BowlingEntry, FallOfWicket, Partnership
 from apps.teams.models import Team
 
 #: Match lifecycle states treated as finished (completed sub-resources cache
 #: much harder than live ones — API_SPECIFICATION §3.9).
 TERMINAL_STATUSES = frozenset({"COMPLETED", "ABANDONED", "CANCELLED", "FORFEITED", "POSTPONED"})
+
+#: Statuses reported under ``/matches/live``: play or paused-in-play (mirrors
+#: the poll dispatcher's ``LIVE_STATUSES`` without importing live services).
+LIVE_LIST_STATUSES = frozenset(
+    {
+        MatchStatus.TOSS,
+        MatchStatus.IN_PROGRESS,
+        MatchStatus.INNINGS_BREAK,
+        MatchStatus.DRINKS,
+        MatchStatus.RAIN_DELAY,
+        MatchStatus.BAD_LIGHT,
+        MatchStatus.STUMPS,
+        MatchStatus.DAY_BREAK,
+    }
+)
+
+#: Default look-ahead/look-back windows for the fixture feeds (days).
+DEFAULT_UPCOMING_DAYS = 7
+DEFAULT_RECENT_DAYS = 7
 
 _RETIREMENT_EVENTS = ("RETIREMENT_HURT", "RETIREMENT_NOT_OUT")
 
@@ -101,22 +126,23 @@ def _innings_queryset(match: Match) -> Any:
     return Innings.objects.filter(match=match).order_by(*_ORDER)
 
 
-def match_shell(match: Match) -> dict[str, Any]:
-    """The match shell + state with each team's latest innings score."""
-    match_teams = list(match.teams.select_related("team").order_by("team_number"))
-    innings = list(_innings_queryset(match))
-    # Reverse one-to-one: fetch summaries by id rather than relying on
-    # ``select_related`` descriptor semantics (absent rows raise otherwise).
-    summaries = {
-        row.innings_id: row
-        for row in InningsSummary.objects.filter(innings__in=[i.id for i in innings])
-    }
+def _shell(
+    match: Match,
+    match_teams: list[Any],
+    innings: list[Any],
+    summaries: dict[Any, InningsSummary | None],
+    result: MatchResult | None,
+    toss: Toss | None,
+) -> dict[str, Any]:
+    """Render the shared match-summary payload from already-fetched rows.
+
+    ``match_shell`` (single match) and the list selectors (batch) both build
+    the exact same payload through here, so an item in ``/matches/live`` is
+    byte-for-byte the ``GET /matches/{id}/`` shell.
+    """
     latest_by_team: dict[UUID, InningsSummary | None] = {}
     for db_innings in innings:
         latest_by_team[db_innings.batting_team_id] = summaries.get(db_innings.id)
-
-    result = MatchResult.objects.filter(match=match).select_related("winner_team").first()
-    toss = Toss.objects.filter(match=match).select_related("winner_team").first()
 
     teams_payload: list[dict[str, Any]] = []
     for mt in match_teams:
@@ -160,6 +186,21 @@ def match_shell(match: Match) -> dict[str, Any]:
         "revision": match.revision,
         "updated_at": match.provider_updated_at.isoformat() if match.provider_updated_at else None,
     }
+
+
+def match_shell(match: Match) -> dict[str, Any]:
+    """The match shell + state with each team's latest innings score."""
+    match_teams = list(match.teams.select_related("team").order_by("team_number"))
+    innings = list(_innings_queryset(match))
+    # Reverse one-to-one: fetch summaries by id rather than relying on
+    # ``select_related`` descriptor semantics (absent rows raise otherwise).
+    summaries = {
+        row.innings_id: row
+        for row in InningsSummary.objects.filter(innings__in=[i.id for i in innings])
+    }
+    result = MatchResult.objects.filter(match=match).select_related("winner_team").first()
+    toss = Toss.objects.filter(match=match).select_related("winner_team").first()
+    return _shell(match, match_teams, innings, summaries, result, toss)
 
 
 def list_innings(match: Match) -> dict[str, Any]:
@@ -493,13 +534,168 @@ def get_innings(match: Match, innings_number: int) -> Innings:
         raise NotFound(f"Match {match.id} has no innings {innings_number}") from exc
 
 
+# --------------------------------------------------------------------------- #
+# Match list feeds (API_SPEC §3.1: /matches/live|upcoming|recent)
+# --------------------------------------------------------------------------- #
+
+
+def _match_filters(
+    *,
+    format_type: str | None = None,
+    gender: str | None = None,
+    series_id: Any = None,
+    team_id: Any = None,
+) -> Any:
+    """Shared ``?format=&gender=&series=&team=`` filtering (all optional)."""
+    qs = Match.objects.select_related("venue")
+    if format_type:
+        qs = qs.filter(format_type=format_type)
+    if gender:
+        qs = qs.filter(gender=gender)
+    if series_id:
+        qs = qs.filter(series_id=series_id)
+    if team_id:
+        qs = qs.filter(teams__team_id=team_id)
+    return qs
+
+
+def list_live_matches(
+    *,
+    format_type: str | None = None,
+    gender: str | None = None,
+    series_id: Any = None,
+    team_id: Any = None,
+) -> Any:
+    """Currently-live matches, newest start first (API_SPEC §3.1)."""
+    return (
+        _match_filters(format_type=format_type, gender=gender, series_id=series_id, team_id=team_id)
+        .filter(status__in=LIVE_LIST_STATUSES)
+        .order_by("-start_time_utc", "-id")
+    )
+
+
+def list_upcoming_matches(
+    *,
+    days: int = DEFAULT_UPCOMING_DAYS,
+    format_type: str | None = None,
+    gender: str | None = None,
+    series_id: Any = None,
+    team_id: Any = None,
+) -> Any:
+    """Scheduled fixtures starting within the next ``days`` (soonest first)."""
+    now = timezone.now()
+    return (
+        _match_filters(format_type=format_type, gender=gender, series_id=series_id, team_id=team_id)
+        .filter(
+            status=MatchStatus.SCHEDULED,
+            start_time_utc__gte=now,
+            start_time_utc__lt=now + datetime.timedelta(days=days),
+        )
+        .order_by("start_time_utc", "id")
+    )
+
+
+def list_recent_matches(
+    *,
+    days: int = DEFAULT_RECENT_DAYS,
+    format_type: str | None = None,
+    gender: str | None = None,
+    series_id: Any = None,
+    team_id: Any = None,
+) -> Any:
+    """Terminal matches finished within the last ``days`` (newest first)."""
+    cutoff = timezone.now() - datetime.timedelta(days=days)
+    return (
+        _match_filters(format_type=format_type, gender=gender, series_id=series_id, team_id=team_id)
+        .filter(status__in=TERMINAL_STATUSES, end_time_utc__gte=cutoff)
+        .order_by("-end_time_utc", "-id")
+    )
+
+
+def match_summaries(
+    matches: Sequence[Match],
+    *,
+    stale_codes: Iterable[str] = (),
+) -> list[dict[str, Any]]:
+    """Batch-render match summaries for a page (constant queries, no N+1).
+
+    Fetches teams, innings, summaries, results, tosses and provider codes in a
+    handful of ``__in`` queries, then renders each item through the same
+    ``_shell`` builder as ``GET /matches/{id}/``. Each item additionally
+    carries the licence flags (``ball_data``/``commentary``/``attribution``)
+    and ``stale`` (True when the item's provider breaker is OPEN — the API
+    serves last-known-good rather than failing, SECURITY §8).
+    """
+    ids = [m.id for m in matches]
+    stale = frozenset(stale_codes)
+
+    match_teams: dict[UUID, list[Any]] = {}
+    for mt in (
+        MatchTeam.objects.filter(match_id__in=ids)
+        .select_related("team")
+        .order_by("match_id", "team_number")
+    ):
+        match_teams.setdefault(mt.match_id, []).append(mt)
+
+    innings_by_match: dict[UUID, list[Any]] = {}
+    for db_innings in Innings.objects.filter(match_id__in=ids).order_by("match_id", *_ORDER):
+        innings_by_match.setdefault(db_innings.match_id, []).append(db_innings)
+
+    summaries = {
+        row.innings_id: row for row in InningsSummary.objects.filter(innings__match_id__in=ids)
+    }
+    results = {
+        row.match_id: row
+        for row in MatchResult.objects.filter(match_id__in=ids).select_related("winner_team")
+    }
+    tosses = {
+        row.match_id: row
+        for row in Toss.objects.filter(match_id__in=ids).select_related("winner_team")
+    }
+
+    provider_ids = {m.source_provider_id for m in matches if m.source_provider_id}
+    code_by_id = dict(DataProvider.objects.filter(id__in=provider_ids).values_list("id", "code"))
+
+    items: list[dict[str, Any]] = []
+    for match in matches:
+        code = code_by_id.get(match.source_provider_id)
+        item = _shell(
+            match,
+            match_teams.get(match.id, []),
+            innings_by_match.get(match.id, []),
+            summaries,
+            results.get(match.id),
+            tosses.get(match.id),
+        )
+        if code is not None:
+            meta = license_meta(code)
+            item["stale"] = code in stale
+            item["ball_data"] = meta["ball_data"]
+            item["commentary"] = meta["commentary"]
+            item["attribution"] = attribution_for(code)
+        else:
+            item["stale"] = False
+            item["ball_data"] = True
+            item["commentary"] = False
+            item["attribution"] = None
+        items.append(item)
+    return items
+
+
 __all__ = [
+    "DEFAULT_RECENT_DAYS",
+    "DEFAULT_UPCOMING_DAYS",
+    "LIVE_LIST_STATUSES",
     "TERMINAL_STATUSES",
     "_delivery_payload",
     "deliveries_queryset",
     "get_innings",
     "get_match",
     "list_innings",
+    "list_live_matches",
+    "list_recent_matches",
+    "list_upcoming_matches",
     "match_scorecard",
     "match_shell",
+    "match_summaries",
 ]
