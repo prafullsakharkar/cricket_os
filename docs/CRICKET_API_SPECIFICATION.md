@@ -162,6 +162,16 @@ responses also carry the source local date/time and timezone.
 - **Query complexity:** single indexed scan on `(status, start_time_utc)` +
   LATERAL join to latest innings summary → O(live matches).
 
+> **Phase D implementation:** `GET /matches/live|upcoming|recent` are live
+> (cursor-paginated, state-dependent caches, strong `ETag`/`304`). Each item is
+> the §4.1 summary plus licence flags — `ball_data`, `commentary`,
+> `attribution` (from the provider policy, SECURITY §11) — and `stale`, which
+> is `true` when the feeding provider's circuit breaker is OPEN (the API serves
+> last-known-good instead of failing). `?format=` is a **filter**, not a
+> renderer selector: DRF's `URL_FORMAT_OVERRIDE` is moved to `?renderer=` so
+> the documented `?format=ODI` filters work (renderer choice stays on the
+> `Accept` header).
+
 ### 3.2 `GET /api/v1/matches/{id}/scorecard`
 
 - **Query:** `innings` (optional), `fields` (sparse).

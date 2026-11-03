@@ -31,6 +31,8 @@ testing, a phased roadmap, and a risk register.
 | 11 | [CRICKET_IMPLEMENTATION_ROADMAP.md](CRICKET_IMPLEMENTATION_ROADMAP.md) | Phases 0–H (incl. Phase 0 licensing gate + Phase A+ scoring engine), tasks, dependencies, acceptance criteria, effort |
 | 12 | [CRICKET_SECURITY_AND_RELIABILITY.md](CRICKET_SECURITY_AND_RELIABILITY.md) | Auth/RBAC, secrets, audit, backups/DR, data quality, licensing-vs-access (Phase 10) |
 | 13 | [CRICKET_RISKS_AND_ASSUMPTIONS.md](CRICKET_RISKS_AND_ASSUMPTIONS.md) | Risks, licensing dependencies, open questions, task checklist |
+| 14 | [LIVE_INGESTION.md](LIVE_INGESTION.md) | Phase D live-ingestion design: state machine, event log, polling/push, breaker, adapter contract, flags |
+| 15 | [RUNBOOKS.md](RUNBOOKS.md) | Runbooks for every live-ingestion alert (provider outage, DLQ, correctness, realtime gap) |
 
 ## Ground rules used throughout
 
@@ -58,6 +60,30 @@ testing, a phased roadmap, and a risk register.
   [CRICKET_IMPLEMENTATION_ROADMAP.md](CRICKET_IMPLEMENTATION_ROADMAP.md).
 
 ## Revision history
+
+### 2026-11-03 — Phase D (live matches) implemented
+
+- **New `LIVE_INGESTION.md`** — the Phase D design companion: Mermaid
+  architecture + lifecycle state machine, `apply_batch` write path (advisory
+  lock, idempotency, per-innings rebuild, shadow verify), the durable per-match
+  event log + event schema table, fixture sync / polling / HMAC push surfaces,
+  the circuit breaker + `meta.stale` contract, the adapter contract kit, the
+  full configuration-flag table, and metrics/alerts.
+- **New `RUNBOOKS.md`** — runbooks for provider outage, schema drift, stuck
+  checkpoint, wrong score complaint, DLQ triage, realtime gap, and identity
+  conflict; every alert in `ops/alerts/live_alerts.yml` maps 1:1 to a runbook.
+- **CRICKET_IMPLEMENTATION_ROADMAP.md** — Phase D marked implemented.
+- **CRICKET_BACKEND_ARCHITECTURE.md** — `matches` owns `MatchEventLog`; new
+  `live` module row; `realtime` consumes the Phase D event stream.
+- **CRICKET_DOMAIN_MODEL.md** — `match.state_title`/`last_ingested_at` fields;
+  Phase D transition-table note (§2.3).
+- **CRICKET_API_SPECIFICATION.md** — Phase D note on `/matches/live|upcoming|
+  recent` (cursor, `meta.stale`, licence flags) and the `?format=`-vs-renderer
+  override decision (§3.1).
+- **CRICKET_DATA_INGESTION.md** — Phase D implementation note on the
+  ReplayAdapter + contract kit (§2.1).
+- **CRICKET_SECURITY_AND_RELIABILITY.md** — Phase D implementation notes for
+  failure recovery (§10) and licensing (§11).
 
 ### 2026-10-29 (follow-up review)
 

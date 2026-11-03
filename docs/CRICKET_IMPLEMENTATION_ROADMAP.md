@@ -344,6 +344,15 @@ mapper) **≥ 95% line+branch (100%)**.
 stream, and live ingestion from a **licensed managed provider** (or the
 ReplayAdapter until a licence exists).
 
+> **Status: implemented** (branch `phase-d`). All ten commit groups landed:
+> state machine, durable per-match event log + Redis publication, live write
+> path with per-innings rebuild + shadow verify, results/corrections/
+> reconciliation, polling + breaker + HMAC push framework, ReplayAdapter +
+> provider contract kit, licensing policy + retention, the
+> `/matches/live|upcoming|recent` feeds, `/metrics` + alert rules + runbooks,
+> and this doc set. See `docs/LIVE_INGESTION.md`. The licensed-provider
+> adapter itself remains gated on Phase 0 (`docs/PROVIDER_DECISION.md`).
+
 - **Tasks**
   1. Fixture sync (cron + push), match status transitions, state machine.
   2. Live ingestion adapter for the chosen provider (push or poll).

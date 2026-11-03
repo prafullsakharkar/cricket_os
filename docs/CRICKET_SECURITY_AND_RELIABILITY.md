@@ -112,6 +112,14 @@ satisfies Phase 10 of the brief and is referenced from the README.
   "wrong score complaint", "identity conflict".
 - Every recovery path must be safe to run **twice**.
 
+> **Phase D implementation:** every recovery path is idempotent (per-match
+> advisory lock + `delivery_seq` resume + `is_current` revisioning). Runbooks
+> for the full Phase D surface live in [RUNBOOKS.md](RUNBOOKS.md); the alert
+> rules that page on-call are in `ops/alerts/live_alerts.yml` (each alert maps
+> 1:1 to a runbook). Circuit breakers are registered in a small registry that
+> the read API consults for `meta.stale` — a provider failure never blocks
+> reads (see §8 and [LIVE_INGESTION.md](LIVE_INGESTION.md)).
+
 ## 11. Licensing vs. access control
 
 - A `LicensedContentPolicy` per provider records: display rights, redistribution
@@ -123,6 +131,14 @@ satisfies Phase 10 of the brief and is referenced from the README.
   scheduled job.
 - **Attribution and licence notes are configuration, not code** — so a licence
   change does not require a redesign.
+
+> **Phase D implementation:** `apps/providers/licensing.py` implements this
+> with `LICENSED_CONTENT_POLICIES` as settings configuration (the `replay`
+> policy ships by default; a licensed provider adds an entry — no code change).
+> `check_license` raises `403 license_required`; `attribution_for`/
+> `license_meta` feed the API list feeds' `meta`; `enforce_retention` enforces
+> per-provider ball-data windows (dry-run by default, keeps derived summaries),
+> wired to a beat task and `manage.py enforce_retention`.
 
 ## 12. Threat model summary
 

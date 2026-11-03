@@ -176,7 +176,7 @@ diagram and PostgreSQL DDL.
 
 ### 2.1 Match (aggregate root for a single game)
 - **Purpose:** One scheduled/played game.
-- **Fields:** `id uuid PK`; `series_id uuid null FK series`; `competition_id uuid null FK`; `season_id uuid null FK`; `format_type enum_format_type not null`; `match_number int null`; `match_desc text` (e.g. "3rd Test"); `venue_id uuid null FK venue`; `gender char(1)`; `start_time_utc timestamptz not null`; `end_time_utc timestamptz null`; `source_local_date date not null`; `source_timezone text`; `status enum_match_status not null default 'scheduled'`; `status_detail text` (short live label, e.g. "Lead by 50"); `result_type enum_result_type null`; `result_text text`; `toss_winner_team_id uuid null FK team`; `toss_decision text null CHECK in ('bat','bowl','n/a')`; `winner_team_id uuid null FK team`; `is_follow_on bool default false`; `is_dls_applied bool default false`; `dls_par_score jsonb null`; `overs_limit int null` (e.g. 50, 20); `balls_per_over int not null default 6`; `provider_match_id text null`; `source_provider_id uuid`; `revision int not null default 1`.
+- **Fields:** `id uuid PK`; `series_id uuid null FK series`; `competition_id uuid null FK`; `season_id uuid null FK`; `format_type enum_format_type not null`; `match_number int null`; `match_desc text` (e.g. "3rd Test"); `venue_id uuid null FK venue`; `gender char(1)`; `start_time_utc timestamptz not null`; `end_time_utc timestamptz null`; `source_local_date date not null`; `source_timezone text`; `status enum_match_status not null default 'scheduled'`; `status_detail text` (short live label, e.g. "Lead by 50"); `state_title text` (Phase D: human-readable session label, e.g. "Day 4 — Tea"); `result_type enum_result_type null`; `result_text text`; `toss_winner_team_id uuid null FK team`; `toss_decision text null CHECK in ('bat','bowl','n/a')`; `winner_team_id uuid null FK team`; `is_follow_on bool default false`; `is_dls_applied bool default false`; `dls_par_score jsonb null`; `overs_limit int null` (e.g. 50, 20); `balls_per_over int not null default 6`; `provider_match_id text null`; `source_provider_id uuid`; `revision int not null default 1`; `last_ingested_at timestamptz null` (Phase D: stamped only when a live batch changed the match); `provider_updated_at timestamptz null`.
 - **Unique:** `ux_match_provider(source_provider_id, provider_match_id)`.
 - **Indexes:** `ix_match_start_time`, `ix_match_status_start`, `ix_match_series`, `ix_match_venue`.
 - **Relationships:** 1 → N `MatchTeam`; 1 → 4 `Innings`; 1 → N `Delivery`; 1 → N `MatchPlayer`.
@@ -197,6 +197,13 @@ diagram and PostgreSQL DDL.
   match is `status=COMPLETED` (or `ABANDONED`) with `result_type=NO_RESULT`.
 - **Observed real labels** include `Tea`, `LIVE`, `Lead by 50`, `opt to bowl` (R7). These are *display* strings; we store them in `status_detail` while normalising to the enum in `status`.
 - Transitions are validated in the scoring service (Phase 5 doc §match completion).
+- **Phase D:** transitions are enforced by the explicit table in
+  `apps/matches/services/state.py` (`ALLOWED_TRANSITIONS`); re-applying the
+  current state is an idempotent no-op; every transition appends a
+  `match.state_changed` event and updates `state_title`/`status_detail`.
+  `state_title` is the human-readable session label; `last_ingested_at` is
+  stamped only when a live batch changed the match (an empty poll never masks
+  provider lag).
 
 ### 2.4 MatchStage
 - **Purpose:** Stage within a tournament (group name, round, playoff).

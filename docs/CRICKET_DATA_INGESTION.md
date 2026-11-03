@@ -81,6 +81,16 @@ It is `internal, test/dev only` and its data is never redistributed. See
 [CRICKET_IMPLEMENTATION_ROADMAP.md](CRICKET_IMPLEMENTATION_ROADMAP.md) (Phase D)
 and [CRICKET_TESTING_STRATEGY.md](CRICKET_TESTING_STRATEGY.md).
 
+> **Phase D implementation:** the adapter lives in
+> `apps/providers/adapters/replay.py` with a deterministic virtual clock,
+> fault injection (duplicate/delayed/reordered/dropped/correction/429/5xx/
+> timeout/malformed/outage) and a hard `ENVIRONMENT=prod` guard; the reusable
+> contract suite that every adapter must pass is
+> `tests/contracts/provider_adapter_kit.py`. The full live-ingestion design —
+> state machine, `apply_batch`, event log, polling/push, breaker +
+> `meta.stale`, flags — is documented in
+> [LIVE_INGESTION.md](LIVE_INGESTION.md).
+
 ---
 
 ## 3. Ingestion pipeline
