@@ -1,10 +1,14 @@
-"""Core views. Phase A exposes only the unauthenticated health endpoint."""
+"""Core views. Phase A exposes only the unauthenticated health endpoint;
+Phase D adds the settings-gated internal ``/metrics`` exposition."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
+from django.http import HttpResponse
+from django.views import View
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -60,5 +64,27 @@ class HealthView(APIView):
                 ),
                 status=503,
             )
+        response["Cache-Control"] = "no-cache"
+        return response
+
+
+class MetricsView(View):
+    """Internal Prometheus exposition endpoint (settings-gated, never public).
+
+    Returns the metrics facade's text exposition (prometheus_client when
+    installed, else the in-process fallback renderer) with ``text/plain;
+    version=0.0.4`` and ``Cache-Control: no-cache``. Registered in the root
+    URLconf only when ``ENABLE_METRICS_ENDPOINT`` is on, so a disabled
+    deployment 404s the path entirely (SECURITY §12: ops surfaces are not
+    exposed publicly).
+    """
+
+    def get(self, request: Any) -> HttpResponse:
+        from apps.core import metrics
+
+        response = HttpResponse(
+            metrics.render(),
+            content_type="text/plain; version=0.0.4; charset=utf-8",
+        )
         response["Cache-Control"] = "no-cache"
         return response

@@ -29,6 +29,13 @@ urlpatterns: list[Any] = [
     path("api/v1/", include("apps.matches.api.urls")),
 ]
 
+# Internal Prometheus exposition — an ops surface, never public. Registered
+# only when ENABLE_METRICS_ENDPOINT is on so the path 404s when disabled.
+if getattr(settings, "ENABLE_METRICS_ENDPOINT", False):
+    from apps.core.views import MetricsView
+
+    urlpatterns.append(path("metrics", MetricsView.as_view(), name="metrics"))
+
 # OpenAPI schema (drf-spectacular) feeds the contract tests; dev/test only.
 if getattr(settings, "ENABLE_API_SCHEMA", False):
     from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView

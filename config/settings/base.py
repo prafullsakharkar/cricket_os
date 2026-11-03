@@ -33,6 +33,7 @@ env = environ.Env(
     # Phase D live-ingestion flags (roadmap discipline: everything behind a flag).
     LIVE_INGESTION_ENABLED=(bool, False),
     LIVE_PUSH_RECEIVER_ENABLED=(bool, False),
+    ENABLE_METRICS_ENDPOINT=(bool, False),
     LIVE_PUSH_HMAC_SECRET=(str, ""),
     LIVE_SHADOW_VERIFY_EVERY=(int, 10),
     LIVE_POLL_INTERVAL_SECONDS=(int, 30),
@@ -63,6 +64,9 @@ CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
 # --------------------------------------------------------------------------- #
 LIVE_INGESTION_ENABLED = env("LIVE_INGESTION_ENABLED")
 LIVE_PUSH_RECEIVER_ENABLED = env("LIVE_PUSH_RECEIVER_ENABLED")
+# Internal Prometheus exposition endpoint (ops surface, never public; gated at
+# URL registration so a disabled deployment 404s the path entirely).
+ENABLE_METRICS_ENDPOINT = env("ENABLE_METRICS_ENDPOINT")
 # Shared secret for the push receiver's HMAC signatures. Empty = receiver 503s.
 LIVE_PUSH_HMAC_SECRET = env("LIVE_PUSH_HMAC_SECRET")
 # Shadow verification cadence: every N appended batches, and always at innings
