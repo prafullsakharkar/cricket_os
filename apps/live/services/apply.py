@@ -262,11 +262,12 @@ def apply_batch(
                     candidate = max(seqs)
                     checkpoint_seq = max(checkpoint_seq or 0, candidate)
 
-        Match.objects.filter(id=match.id).update(
-            last_ingested_at=observed,
-            ingested_at=observed,
-            provider_updated_at=observed,
-        )
+        # Freshness is only re-stamped when a poll actually changed something;
+        # an empty poll must not mask provider lag (``meta.stale``).
+        updates: dict[str, Any] = {"ingested_at": observed, "provider_updated_at": observed}
+        if changed:
+            updates["last_ingested_at"] = observed
+        Match.objects.filter(id=match.id).update(**updates)
         metrics.DUPLICATE_SUPPRESSED.inc(noop)
         if provider is not None and checkpoint_scope:
             transaction.on_commit(

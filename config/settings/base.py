@@ -30,6 +30,20 @@ env = environ.Env(
     CELERY_TASK_ALWAYS_EAGER=(bool, False),
     THROTTLE_ANON=(str, "120/min"),
     THROTTLE_USER=(str, "600/min"),
+    # Phase D live-ingestion flags (roadmap discipline: everything behind a flag).
+    LIVE_INGESTION_ENABLED=(bool, False),
+    LIVE_PUSH_RECEIVER_ENABLED=(bool, False),
+    LIVE_PUSH_HMAC_SECRET=(str, ""),
+    LIVE_SHADOW_VERIFY_EVERY=(int, 10),
+    LIVE_POLL_INTERVAL_SECONDS=(int, 30),
+    LIVE_POLL_LOCK_TTL_SECONDS=(int, 300),
+    LIVE_FRESHNESS_STALE_SECONDS=(int, 60),
+    LIVE_EVENT_RETENTION_HOURS=(int, 24),
+    LIVE_RECONCILIATION_WINDOW_HOURS=(int, 24),
+    LIVE_BREAKER_FAILURE_THRESHOLD=(int, 5),
+    LIVE_BREAKER_RECOVERY_SECONDS=(int, 60),
+    LIVE_BREAKER_SUCCESS_THRESHOLD=(int, 2),
+    LIVE_PUSH_REPLAY_WINDOW_SECONDS=(int, 300),
 )
 
 # Read a local .env when present. Never committed (see .gitignore).
@@ -41,6 +55,37 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default=DEV_INSECURE_SECRET_KEY)
 DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+# --------------------------------------------------------------------------- #
+# Phase D — live ingestion flags (LIVE_INGESTION.md documents each one).
+# Everything is off by default; a deploy opts in per provider and surface.
+# --------------------------------------------------------------------------- #
+LIVE_INGESTION_ENABLED = env("LIVE_INGESTION_ENABLED")
+LIVE_PUSH_RECEIVER_ENABLED = env("LIVE_PUSH_RECEIVER_ENABLED")
+# Shared secret for the push receiver's HMAC signatures. Empty = receiver 503s.
+LIVE_PUSH_HMAC_SECRET = env("LIVE_PUSH_HMAC_SECRET")
+# Shadow verification cadence: every N appended batches, and always at innings
+# end (see apps.live.services.apply / verify).
+LIVE_SHADOW_VERIFY_EVERY = env("LIVE_SHADOW_VERIFY_EVERY")
+# Polling cadence while a match is IN_PROGRESS; breaks/terminal are slower
+# (apps.live.services.polling.cadence_for).
+LIVE_POLL_INTERVAL_SECONDS = env("LIVE_POLL_INTERVAL_SECONDS")
+# Redis lock TTL for per-match poll de-duplication (correctness of writes comes
+# from the Postgres per-match advisory lock, not from this).
+LIVE_POLL_LOCK_TTL_SECONDS = env("LIVE_POLL_LOCK_TTL_SECONDS")
+# Freshness threshold: a live match older than this is served with
+# ``meta.stale=true`` (API_SPECIFICATION §3.1).
+LIVE_FRESHNESS_STALE_SECONDS = env("LIVE_FRESHNESS_STALE_SECONDS")
+# Post-completion event-log retention window (prune_events).
+LIVE_EVENT_RETENTION_HOURS = env("LIVE_EVENT_RETENTION_HOURS")
+# Post-completion reconciliation window (cache policy: immutable after this).
+LIVE_RECONCILIATION_WINDOW_HOURS = env("LIVE_RECONCILIATION_WINDOW_HOURS")
+# Per-provider-endpoint circuit breaker thresholds (breaker.py).
+LIVE_BREAKER_FAILURE_THRESHOLD = env("LIVE_BREAKER_FAILURE_THRESHOLD")
+LIVE_BREAKER_RECOVERY_SECONDS = env("LIVE_BREAKER_RECOVERY_SECONDS")
+LIVE_BREAKER_SUCCESS_THRESHOLD = env("LIVE_BREAKER_SUCCESS_THRESHOLD")
+# Push receiver: HMAC replay window (seconds).
+LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
 
 # The dedicated PostgreSQL schema every table lives in.
 DB_SCHEMA = "cricket"
