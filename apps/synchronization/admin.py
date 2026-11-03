@@ -13,7 +13,7 @@ from typing import Any
 
 from django.contrib import admin
 
-from apps.synchronization.models import DataCorrection, SyncCheckpoint
+from apps.synchronization.models import DataCorrection, ReconciliationJob, SyncCheckpoint
 
 
 @admin.register(SyncCheckpoint)
@@ -79,4 +79,49 @@ class DataCorrectionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         return False
 
 
-__all__ = ["DataCorrectionAdmin", "SyncCheckpointAdmin"]
+@admin.action(description="Mark selected jobs resolved", permissions=("change",))
+def resolve_jobs(modeladmin: Any, request: Any, queryset: Any) -> None:
+    from apps.synchronization.services.reconciliation import resolve_job
+
+    for job in queryset:
+        resolve_job(job)
+
+
+@admin.action(description="Mark selected jobs ignored", permissions=("change",))
+def ignore_jobs(modeladmin: Any, request: Any, queryset: Any) -> None:
+    from apps.synchronization.services.reconciliation import resolve_job
+
+    for job in queryset:
+        resolve_job(job, status=ReconciliationJob.STATUS_IGNORED)
+
+
+@admin.register(ReconciliationJob)
+class ReconciliationJobAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    """Detected divergences; resolution is a manual steward action."""
+
+    list_display = (
+        "created_at",
+        "scope_key",
+        "status",
+        "resolved_at",
+    )
+    search_fields = ("scope_key",)
+    list_filter = ("status",)
+    readonly_fields = (
+        "scope_key",
+        "expected_state",
+        "observed_state",
+        "differences",
+        "created_at",
+        "resolved_at",
+    )
+    actions = (resolve_jobs, ignore_jobs)
+
+    def has_add_permission(self, request: Any) -> bool:
+        return False
+
+    def has_delete_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+
+__all__ = ["DataCorrectionAdmin", "ReconciliationJobAdmin", "SyncCheckpointAdmin"]

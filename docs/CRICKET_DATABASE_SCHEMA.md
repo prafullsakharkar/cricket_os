@@ -1208,6 +1208,7 @@ CREATE TABLE cricket.reconciliation_job (
   id uuid PRIMARY KEY, scope_key text NOT NULL, expected_state jsonb, observed_state jsonb,
   differences jsonb, status text NOT NULL DEFAULT 'open', created_at timestamptz NOT NULL DEFAULT now(),
   resolved_at timestamptz);
+CREATE INDEX ix_reconciliation_scope ON cricket.reconciliation_job (scope_key, status);
 
 CREATE TABLE cricket.data_correction (
   id uuid PRIMARY KEY, provider_id uuid REFERENCES cricket.data_provider(id),

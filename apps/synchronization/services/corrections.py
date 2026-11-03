@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.core import events as core_events
 from apps.synchronization.models import DataCorrection
 
 
@@ -49,3 +50,66 @@ def record_correction(
         source_revision=source_revision,
         target_revision=target_revision,
     )
+
+
+def apply_manual_correction(
+    *,
+    match: Any,
+    entity_type: str,
+    entity_id: Any,
+    field_path: str,
+    old_value: Any,
+    new_value: Any,
+    reason: str,
+    provider: Any = None,
+    actor: Any = None,
+    target_revision: int = 1,
+    source: Any = None,
+) -> DataCorrection:
+    """Record an append-only steward/provider correction + event.
+
+    Manual corrections use the same entry point as provider revisions: the
+    audit row and the ``correction.applied`` event commit with the change, and
+    the post-commit Tier-2 subscriber recomputes statistics. Corrections never
+    bypass the delivery write path for ball content (that stays
+    ``append_or_revise``); this is for match/entity metadata.
+    """
+    from apps.matches import event_schemas
+    from apps.matches.services import event_log
+
+    # ``applied_by`` is a UUID column; accept a model instance or an id.
+    if actor is not None:
+        actor = getattr(actor, "id", actor)
+    row = record_correction(
+        provider=provider,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        field_path=field_path,
+        old_value=old_value,
+        new_value=new_value,
+        reason=reason,
+        applied_by=actor,
+        target_revision=target_revision,
+    )
+    payload = {
+        "entity_type": entity_type,
+        "entity_id": str(entity_id),
+        "field_path": field_path,
+        "reason": reason,
+        "target_revision": target_revision,
+        "result_changed": False,
+    }
+    if match is not None:
+        event_log.append_event(match.id, event_schemas.CORRECTION_APPLIED, payload)
+        core_events.publish(
+            core_events.TOPIC_CORRECTION_APPLIED,
+            {
+                "match_id": str(match.id),
+                "source": getattr(source, "code", None),
+                "digest": None,
+            },
+        )
+    return row
+
+
+__all__ = ["apply_manual_correction", "record_correction"]

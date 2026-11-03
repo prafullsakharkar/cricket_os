@@ -47,6 +47,40 @@ class SyncCheckpoint(UUIDPrimaryKeyModel):
         return f"{self.provider_id}:{self.scope_key}"
 
 
+class ReconciliationJob(UUIDPrimaryKeyModel):
+    """A detected divergence between provider state and derived state.
+
+    Rows are operational: a mismatch is recorded, surfaced in admin and
+    *never* auto-corrected silently. ``scope_key`` identifies the comparison
+    (e.g. ``state:<match id>``) so re-running a reconciliation is idempotent
+    and cannot open duplicate jobs for the same still-unresolved divergence.
+    """
+
+    SCOPE_CHECKPOINT = "checkpoint"
+    SCOPE_STATE = "state"
+    SCOPE_FIXTURES = "fixtures"
+    STATUS_OPEN = "open"
+    STATUS_RESOLVED = "resolved"
+    STATUS_IGNORED = "ignored"
+
+    scope_key = models.TextField()
+    expected_state = models.JSONField(null=True, blank=True)
+    observed_state = models.JSONField(null=True, blank=True)
+    differences = models.JSONField(null=True, blank=True)
+    status = models.TextField(default=STATUS_OPEN)
+    created_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "reconciliation_job"
+        indexes = [
+            models.Index(fields=["scope_key", "status"], name="ix_reconciliation_scope"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.scope_key}:{self.status}"
+
+
 class DataCorrection(UUIDPrimaryKeyModel):
     provider = models.ForeignKey(
         "providers.DataProvider",

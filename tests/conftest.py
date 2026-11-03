@@ -145,5 +145,7 @@ def _isolate_event_subscriptions() -> Iterator[None]:
     events.subscribe(events.TOPIC_PLAYER_MERGED, handlers.on_player_merged)
     events.subscribe(events.TOPIC_PROVIDER_MAP_VERIFIED, handlers.on_provider_map_verified)
     events.subscribe(events.TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
+    events.subscribe(events.TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
+    events.subscribe(events.TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
     yield
     events.clear_subscriptions()
