@@ -9,17 +9,16 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _ensure_reconciliation_reporter() -> Any:
-    """Guarantee the DLQ reporter for reconciliation mismatches is registered.
+def _ensure_default_reporters() -> Any:
+    """Guarantee the DLQ reporters (reconciliation + shadow verify) are wired.
 
-    ``IngestionConfig.ready`` registers it once during Django setup, but a
-    test may clear/replace it; re-registering per test keeps the
-    ``reconciliation_mismatch`` IngestionError rows observable and isolated.
+    ``IngestionConfig.ready`` registers them once during Django setup, but a
+    test may clear/replace them; re-registering per test keeps the
+    ``IngestionError`` rows the suite asserts on observable and isolated.
     """
-    from apps.ingestion.services.jobs import reconciliation_mismatch_reporter
-    from apps.synchronization.services.reconciliation import register_mismatch_reporter
+    from apps.ingestion.services.reporters import register_default_reporters
 
-    register_mismatch_reporter(reconciliation_mismatch_reporter)
+    register_default_reporters()
 
 
 @pytest.fixture

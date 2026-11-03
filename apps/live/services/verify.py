@@ -20,14 +20,25 @@ import threading
 from typing import Any
 
 from apps.core import metrics
-from apps.ingestion.services.jobs import record_error
 from apps.innings.models import Innings
 from apps.scorecards.services.rebuild import verify_innings as _verify
 
 logger = logging.getLogger("apps.live.verify")
 
+#: Mismatch reporter registered by ``apps.ingestion`` (dependency inversion:
+#: ``apps.live`` never imports the DLQ writer directly because
+#: ``apps.providers.adapters.replay`` reaches this module transitively and the
+#: import-linter contract forbids ``providers -> ingestion``).
+_shadow_reporter: Any = None
+
 _COUNTS: dict[str, int] = {}
 _LOCK = threading.Lock()
+
+
+def register_shadow_verify_reporter(reporter: Any) -> None:
+    """Set the callback that records a shadow-verify mismatch (DLQ row)."""
+    global _shadow_reporter
+    _shadow_reporter = reporter
 
 
 def reset_counters() -> None:
@@ -56,13 +67,8 @@ def verify(innings: Innings, *, force: bool = True) -> bool:
     if _verify(innings):
         return True
     metrics.SHADOW_VERIFY_MISMATCHES.inc()
-    record_error(
-        None,
-        stage="shadow_verify",
-        payload={"match_id": str(innings.match_id), "innings_id": str(innings.id)},
-        error_class="ShadowVerifyMismatch",
-        error_detail="persisted Tier-1 rows differed from a fresh engine rebuild; healed",
-    )
+    if _shadow_reporter is not None:
+        _shadow_reporter(innings)
     logger.warning(
         "shadow verify mismatch healed",
         extra={"match_id": str(innings.match_id), "innings_id": str(innings.id)},
@@ -75,4 +81,4 @@ def verify(innings: Innings, *, force: bool = True) -> bool:
     return False
 
 
-__all__ = ["reset_counters", "should_verify", "verify"]
+__all__ = ["register_shadow_verify_reporter", "reset_counters", "should_verify", "verify"]

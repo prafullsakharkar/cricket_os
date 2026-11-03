@@ -44,6 +44,7 @@ env = environ.Env(
     LIVE_BREAKER_RECOVERY_SECONDS=(int, 60),
     LIVE_BREAKER_SUCCESS_THRESHOLD=(int, 2),
     LIVE_PUSH_REPLAY_WINDOW_SECONDS=(int, 300),
+    DJANGO_ENVIRONMENT=(str, "dev"),
 )
 
 # Read a local .env when present. Never committed (see .gitignore).
@@ -86,6 +87,10 @@ LIVE_BREAKER_RECOVERY_SECONDS = env("LIVE_BREAKER_RECOVERY_SECONDS")
 LIVE_BREAKER_SUCCESS_THRESHOLD = env("LIVE_BREAKER_SUCCESS_THRESHOLD")
 # Push receiver: HMAC replay window (seconds).
 LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
+
+# Deployment environment name ("dev"/"test"/"prod"). The ReplayAdapter is
+# hard-gated to non-prod (see apps.providers.adapters.replay).
+ENVIRONMENT = env("DJANGO_ENVIRONMENT")
 
 # The dedicated PostgreSQL schema every table lives in.
 DB_SCHEMA = "cricket"
