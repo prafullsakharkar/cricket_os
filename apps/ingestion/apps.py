@@ -18,5 +18,10 @@ class IngestionConfig(AppConfig):
         if getattr(self, "_ready_done", False):
             return
         from apps.ingestion.adapters import cricsheet, summary_cards  # noqa: F401
+        from apps.ingestion.services.jobs import reconciliation_mismatch_reporter
+        from apps.synchronization.services.reconciliation import register_mismatch_reporter
 
+        # Dependency inversion: synchronization owns the job; ingestion owns the
+        # DLQ writer (synchronization never imports ingestion).
+        register_mismatch_reporter(reconciliation_mismatch_reporter)
         self._ready_done = True

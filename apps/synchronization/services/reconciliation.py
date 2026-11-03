@@ -25,8 +25,29 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from apps.ingestion.services.jobs import record_error
 from apps.synchronization.models import ReconciliationJob, SyncCheckpoint
+
+#: Mismatch reporter registered by ``apps.ingestion`` (dependency inversion:
+#: synchronization never imports ingestion; ingestion registers the DLQ writer
+#: via :func:`register_mismatch_reporter` in its ``AppConfig.ready()``).
+_mismatch_reporter = None
+
+
+def register_mismatch_reporter(reporter: Any | None) -> None:
+    """Set the callback that surfaces a reconciliation mismatch to ops.
+
+    ``reporter(job, provider)`` receives the ``ReconciliationJob`` and the
+    ``DataProvider`` (or ``None``). The default (no reporter) is a no-op, so
+    the reconciliation service works standalone; a deployment that wires the
+    ``ingestion`` app up writes the redacted ``IngestionError`` DLQ row.
+    """
+    global _mismatch_reporter
+    _mismatch_reporter = reporter
+
+
+def _report_mismatch(job: ReconciliationJob, *, provider: Any = None) -> None:
+    if _mismatch_reporter is not None:
+        _mismatch_reporter(job, provider=provider)
 
 
 def _utcnow() -> datetime:
@@ -59,19 +80,8 @@ def open_job(
 
 
 def _error_for(job: ReconciliationJob, *, provider: Any = None) -> None:
-    """Write the DLQ row that makes a mismatch visible to ops."""
-    record_error(
-        None,
-        stage="reconciliation_mismatch",
-        payload={
-            "scope_key": job.scope_key,
-            "differences": job.differences,
-        },
-        error_class="ReconciliationMismatch",
-        error_detail=(
-            f"reconciliation job {job.scope_key} found {len(job.differences or {})} differences"
-        ),
-    )
+    """Surface the mismatch to ops via the registered reporter (DLQ row)."""
+    _report_mismatch(job, provider=provider)
 
 
 def _stored_delivery_seqs(innings_id: Any) -> frozenset[int]:
@@ -337,5 +347,6 @@ __all__ = [
     "reconcile_checkpoint_gaps",
     "reconcile_fixtures",
     "reconcile_state",
+    "register_mismatch_reporter",
     "resolve_job",
 ]

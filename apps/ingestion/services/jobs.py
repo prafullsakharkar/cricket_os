@@ -133,21 +133,48 @@ def record_error(
     error_detail: str | None = None,
     attempt: int = 1,
     next_retry_at: datetime | None = None,
+    provider_id: Any = None,
 ) -> IngestionError:
     """Write one ``IngestionError`` DLQ row (payload redacted; audit-safe).
 
     ``provider_id`` falls back to the job's provider so rows keep a provider
-    stamp even when the job reference is absent.
+    stamp even when the job reference is absent. Pass ``provider_id``
+    explicitly when there is no ``ImportJob`` but the provider is known (for
+    example the reconciliation-mismatch reporter registered by this app).
     """
     return IngestionError.objects.create(
         import_job=job,
-        provider_id=job.provider_id if job is not None else None,
+        provider_id=provider_id
+        if provider_id is not None
+        else (job.provider_id if job is not None else None),
         stage=stage,
         payload=redact(payload) if payload is not None else None,
         error_class=error_class,
         error_detail=error_detail,
         attempt=attempt,
         next_retry_at=next_retry_at,
+    )
+
+
+def reconciliation_mismatch_reporter(job: Any, *, provider: Any = None) -> None:
+    """DLQ row for a reconciliation mismatch (redacted, provider-stamped).
+
+    Registered by ``IngestionConfig.ready`` as the ``synchronization``
+    mismatch reporter (dependency inversion: synchronization never imports
+    ingestion, so ingestion registers this callback with it instead).
+    """
+    record_error(
+        None,
+        stage="reconciliation_mismatch",
+        payload={
+            "scope_key": job.scope_key,
+            "differences": job.differences,
+        },
+        error_class="ReconciliationMismatch",
+        error_detail=(
+            f"reconciliation job {job.scope_key} found {len(job.differences or {})} differences"
+        ),
+        provider_id=getattr(provider, "id", None),
     )
 
 
@@ -162,5 +189,6 @@ __all__ = [
     "mark_partial",
     "mark_succeeded",
     "open_errors",
+    "reconciliation_mismatch_reporter",
     "record_error",
 ]

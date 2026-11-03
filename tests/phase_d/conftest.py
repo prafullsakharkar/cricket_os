@@ -8,6 +8,20 @@ from typing import Any
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _ensure_reconciliation_reporter() -> Any:
+    """Guarantee the DLQ reporter for reconciliation mismatches is registered.
+
+    ``IngestionConfig.ready`` registers it once during Django setup, but a
+    test may clear/replace it; re-registering per test keeps the
+    ``reconciliation_mismatch`` IngestionError rows observable and isolated.
+    """
+    from apps.ingestion.services.jobs import reconciliation_mismatch_reporter
+    from apps.synchronization.services.reconciliation import register_mismatch_reporter
+
+    register_mismatch_reporter(reconciliation_mismatch_reporter)
+
+
 @pytest.fixture
 def make_match() -> Callable[..., Any]:
     from tests.phase_c.factories import make_match as factory
