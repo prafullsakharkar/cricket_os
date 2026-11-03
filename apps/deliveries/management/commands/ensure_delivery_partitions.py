@@ -33,6 +33,5 @@ class Command(BaseCommand):
             raise ValueError("--from must be <= --to")
         created = [y for y in range(from_year, to_year + 1) if ensure_partition(y)]
         self.stdout.write(
-            f"delivery partitions ensured for {from_year}..{to_year} "
-            f"({len(created)} created)"
+            f"delivery partitions ensured for {from_year}..{to_year} ({len(created)} created)"
         )

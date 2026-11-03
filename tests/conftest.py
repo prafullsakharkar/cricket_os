@@ -80,8 +80,8 @@ def _flush_includes_unmanaged_app_tables() -> Iterator[None]:
     if not settings.configured:
         yield
         return
-    from django.apps import apps
     import django.core.management.commands.flush as flush_command
+    from django.apps import apps
 
     original = flush_command.sql_flush
 

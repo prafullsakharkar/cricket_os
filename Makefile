@@ -5,7 +5,7 @@ MANAGE := $(UV) run python manage.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-identity test-nocov lint fmt typecheck imports check shell
+.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-identity test-nocov lint fmt typecheck imports check shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -35,11 +35,17 @@ run: ## Run the ASGI dev server (uvicorn)
 worker: ## Run a Celery worker
 	$(UV) run celery -A config.celery worker -l info
 
-test: ## Run the full test suite with coverage (core + Phase B apps >= 90% line+branch)
+test: ## Run the full test suite with coverage (core + Phase B + Phase C apps >= 90% line+branch)
 	$(UV) run pytest --cov=apps/core --cov=apps/venues --cov=apps/teams \
 		--cov=apps/players --cov=apps/competitions --cov=apps/providers \
-		--cov=apps/administration --cov-branch --cov-report=term-missing \
-		--cov-report=xml:coverage.xml
+		--cov=apps/administration --cov=apps/matches --cov=apps/innings \
+		--cov=apps/deliveries --cov=apps/scorecards --cov=apps/statistics \
+		--cov=apps/ingestion --cov=apps/synchronization --cov-branch \
+		--cov-report=term-missing --cov-report=xml:coverage.xml
+
+test-phasec: ## Enforce >=95% line+branch on the write path + rebuild + Cricsheet mapper
+	$(UV) run pytest -o addopts="" tests/phase_c -m "not benchmark" \
+		--cov-config=.coveragerc-phasec --cov --cov-report=term-missing
 
 test-scoring: ## Enforce >=95% line+branch coverage on the pure scoring engine
 	$(UV) run pytest -o addopts="" tests/scoring -m "not benchmark" \
@@ -68,7 +74,7 @@ typecheck: ## Static type check (mypy)
 imports: ## Enforce import boundaries (import-linter)
 	$(UV) run lint-imports
 
-check: lint typecheck imports test test-scoring test-identity ## Everything CI enforces
+check: lint typecheck imports test test-scoring test-identity test-phasec ## Everything CI enforces
 
 shell: ## Django shell
 	$(MANAGE) shell

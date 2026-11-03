@@ -55,8 +55,11 @@ reads the same variables.
 | `make migrate` | Apply database migrations |
 | `make run` | Run the ASGI dev server (uvicorn, port 8000) |
 | `make worker` | Run a Celery worker |
-| `make test` | Full test suite with the coverage gate |
+| `make test` | Full test suite with the coverage gate (core + Phase B + Phase C ≥ 90%) |
 | `make test-nocov` | Fast inner loop (no coverage) |
+| `make test-scoring` | Pure scoring engine ≥ 95% line+branch |
+| `make test-phasec` | Write path + rebuild + Cricsheet mapper ≥ 95% line+branch |
+| `make test-identity` | Identity engine (scoring + merge) 100% line+branch |
 | `make lint` | ruff lint + format check |
 | `make fmt` | Auto-fix lint and format |
 | `make typecheck` | mypy (django-stubs + DRF stubs) |
