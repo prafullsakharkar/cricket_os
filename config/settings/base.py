@@ -92,6 +92,26 @@ LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
 # hard-gated to non-prod (see apps.providers.adapters.replay).
 ENVIRONMENT = env("DJANGO_ENVIRONMENT")
 
+# --------------------------------------------------------------------------- #
+# Licensing policy (SECURITY §11: configuration, not code)
+# --------------------------------------------------------------------------- #
+#: Per-provider content policy. A licence change is a config change, never a
+#: code change. ``replay`` is the internal fake provider; a licensed provider
+#: adds an entry here (post Phase-0 gate). Absent entries fall back to the
+#: default policy (display allowed, commentary/derived feeds not licensed).
+LICENSED_CONTENT_POLICIES = {
+    "replay": {
+        "display_rights": True,
+        "redistribution_rights": False,
+        "attribution_required": True,
+        "attribution": "Replay (internal test corpus)",
+        "commentary_allowed": False,
+        "derived_feeds_allowed": False,
+        "ball_data_retention_days": None,
+        "notes": "Internal fake provider; data is never redistributed.",
+    },
+}
+
 # The dedicated PostgreSQL schema every table lives in.
 DB_SCHEMA = "cricket"
 

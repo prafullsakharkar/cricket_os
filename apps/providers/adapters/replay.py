@@ -260,10 +260,9 @@ class ReplayAdapter:
         for innings_number, seq, delivery in rows:
             if seq in set(self.faults.dropped):
                 continue
-            if seq in self._held:
-                if self._held[seq] > 0:
-                    self._held[seq] -= 1
-                    continue
+            if seq in self._held and self._held[seq] > 0:
+                self._held[seq] -= 1
+                continue
             if not self._released(seq):
                 continue
             if seq in set(self.faults.duplicate):
