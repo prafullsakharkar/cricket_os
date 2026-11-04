@@ -227,6 +227,30 @@ CACHE_BUILD_SECONDS = metric(
 CACHE_BREAKER_OPEN = metric(
     "cache_breaker_open", "Local cache breaker state (0=closed, 1=open)", kind="gauge"
 )
+# Realtime fan-out (API_SPEC §3.8, PERFORMANCE §8, SECURITY §11).
+REALTIME_CONNECTIONS = metric(
+    "realtime_connections", "Subscribed connections on this node", kind="gauge"
+)
+REALTIME_FANOUT_FRAMES = metric("realtime_fanout_frames_total", "Frames delivered to subscribers")
+REALTIME_COALESCED = metric(
+    "realtime_coalesced_batches_total", "Coalesced batch frames emitted (≤1 Hz)"
+)
+REALTIME_DROPPED = metric(
+    "realtime_dropped_frames_total", "Frames dropped for a slow (full-queue) subscriber"
+)
+REALTIME_GAP_BACKFILLS = metric(
+    "realtime_gap_backfills_total", "Missing seq runs replayed from the event log"
+)
+REALTIME_RESYNCS = metric(
+    "realtime_resyncs_total", "resync_required frames sent (unreplayable position)"
+)
+REALTIME_INVALID_FRAMES = metric(
+    "realtime_invalid_frames_total", "Broker messages rejected as malformed/oversized"
+)
+REALTIME_DEGRADED = metric(
+    "realtime_degraded", "Realtime broker in degraded polling mode (0/1)", kind="gauge"
+)
+REALTIME_DRAINS = metric("realtime_drains_total", "Graceful hub drains performed")
 # Throttling (API_SPEC §7).
 RATE_LIMIT_DENIED = metric(
     "rate_limit_denied_total", "Requests denied by the token-bucket limiter", labelnames=("scope",)
@@ -258,6 +282,17 @@ __all__ = [
     "JOBS_PER_MINUTE",
     "MATCH_FRESHNESS_SECONDS",
     "PROVIDER_LAG_SECONDS",
+    "RATE_LIMIT_DENIED",
+    "RATE_LIMIT_FALLBACK",
+    "REALTIME_COALESCED",
+    "REALTIME_CONNECTIONS",
+    "REALTIME_DEGRADED",
+    "REALTIME_DRAINS",
+    "REALTIME_DROPPED",
+    "REALTIME_FANOUT_FRAMES",
+    "REALTIME_GAP_BACKFILLS",
+    "REALTIME_INVALID_FRAMES",
+    "REALTIME_RESYNCS",
     "SHADOW_VERIFY_MISMATCHES",
     "Metric",
     "metric",

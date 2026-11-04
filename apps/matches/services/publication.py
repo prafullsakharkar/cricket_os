@@ -12,9 +12,8 @@ import json
 import logging
 from typing import Any
 
-from django_redis import get_redis_connection
-
 from apps.core import metrics
+from apps.core.redis import ROLE_PUBSUB, client
 
 logger = logging.getLogger("apps.matches.publication")
 
@@ -29,10 +28,13 @@ def publish_match_event(match_id: Any, event: dict[str, Any]) -> bool:
 
     Never raises: a Redis outage is logged and counted so it cannot fail a
     committed ingestion or a read request.
+
+    Written to the dedicated ``pubsub`` role (Phase E ledger #9); the realtime
+    broker on every web node pattern-subscribes to ``match:*`` on the same role.
     """
     payload = json.dumps(event, separators=(",", ":"), default=str)
     try:
-        connection = get_redis_connection("default")
+        connection = client(ROLE_PUBSUB)
         connection.publish(channel_for(match_id), payload)
     except Exception:
         metrics.EVENT_PUBLISH_FAILURES.inc()

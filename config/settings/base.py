@@ -162,6 +162,7 @@ LOCAL_APPS = [
     "apps.ingestion",
     "apps.synchronization",
     "apps.live",
+    "apps.realtime",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

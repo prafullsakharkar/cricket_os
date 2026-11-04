@@ -343,6 +343,81 @@ def test_unknown_topic_is_a_noop() -> None:
     assert invalidation.namespaces_for("nope", {"match_id": "m"}) == set()
 
 
+def test_match_state_change_without_match_id_invalidates_nothing() -> None:
+    assert invalidation.namespaces_for(events.TOPIC_MATCH_STATE_CHANGED, {"foo": "bar"}) == set()
+
+
+def test_player_merged_without_ids_invalidates_the_list_only() -> None:
+    assert invalidation.namespaces_for(events.TOPIC_PLAYER_MERGED, {}) == {"players"}
+
+
+def test_reference_update_without_id_invalidates_the_list_only() -> None:
+    assert invalidation.namespaces_for(events.TOPIC_PLAYER_UPDATED, {}) == {"players"}
+    assert invalidation.namespaces_for(events.TOPIC_TEAM_UPDATED, {}) == {"teams"}
+
+
+def test_series_update_without_id_invalidates_the_match_feeds_only() -> None:
+    assert invalidation.namespaces_for(events.TOPIC_SERIES_UPDATED, {}) == {
+        "series",
+        "matches:live",
+        "matches:upcoming",
+        "matches:recent",
+    }
+
+
+def test_competition_update_without_id_invalidates_collections_only() -> None:
+    assert invalidation.namespaces_for(events.TOPIC_COMPETITION_UPDATED, {}) == {
+        "competitions",
+        "series",
+    }
+
+
+def test_match_tags_guards_a_missing_match_id() -> None:
+    # The registry only reaches _match_tags when a match_id was derived (the
+    # completion/correction namespaces require one), so this guard is defensive;
+    # exercised directly for branch coverage.
+    assert invalidation._match_tags({"series_id": "s1"}) == {"series-s1"}
+    assert invalidation._match_tags({}) == set()
+
+
+def test_namespaces_for_tolerates_a_failing_invalidator() -> None:
+    def boom(payload: Any) -> set[str]:
+        raise ValueError("bad payload")
+
+    def fine(payload: Any) -> set[str]:
+        return {"match:m1"}
+
+    invalidation.register("test.failing-topic", boom)
+    invalidation.register("test.failing-topic", fine)
+    assert invalidation.namespaces_for("test.failing-topic", {}) == {"match:m1"}
+
+
+def test_invalidate_event_tolerates_a_failing_purger() -> None:
+    class _Boom:
+        def purge(self, tags: Any) -> None:
+            raise ConnectionError("cdn down")
+
+    invalidation.configure_purger(_Boom())
+    # Namespaces are non-empty so the CDN purge hook is reached; a failure
+    # there must never fail the write path that triggered invalidation.
+    invalidation.invalidate_event(events.TOPIC_MATCH_COMPLETED, {"match_id": "m1"})
+    assert True
+
+
+def test_bus_subscriber_ignores_non_mapping_payloads() -> None:
+    fake = purger.RecordingCachePurger()
+    invalidation.configure_purger(fake)
+    # A non-mapping payload is dropped by the subscriber's isinstance guard.
+    events.publish(events.TOPIC_MATCH_COMPLETED, "not-a-mapping", on_commit=False)
+    assert fake.calls == []
+
+
+def test_registered_topics_reports_the_default_registry() -> None:
+    topics = invalidation.registered_topics()
+    assert events.TOPIC_DELIVERY_APPENDED in topics
+    assert events.TOPIC_PLAYER_MERGED in topics
+
+
 def test_invalidation_never_raises_when_the_cache_is_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
