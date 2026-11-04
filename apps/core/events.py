@@ -42,6 +42,22 @@ TOPIC_INGESTION_FAILED = "ingestion.failed"
 TOPIC_MATCH_REOPENED = "match.reopened"
 #: Audit-worthy topic: a steward requested a manual correction (queued/approved).
 TOPIC_CORRECTION_REQUESTED = "correction.requested"
+#: Cache invalidation: a match lifecycle/state row changed (Phase E).
+TOPIC_MATCH_STATE_CHANGED = "match.state_changed"
+#: Cache invalidation: a match shell/result/metadata row changed (Phase E).
+TOPIC_MATCH_UPDATED = "match.updated"
+#: Cache invalidation: an innings summary/progression changed (Phase E).
+TOPIC_INNINGS_UPDATED = "innings.updated"
+#: Cache invalidation: a player profile changed (Phase E reference data).
+TOPIC_PLAYER_UPDATED = "player.updated"
+#: Cache invalidation: a team profile changed (Phase E reference data).
+TOPIC_TEAM_UPDATED = "team.updated"
+#: Cache invalidation: a venue profile changed (Phase E reference data).
+TOPIC_VENUE_UPDATED = "venue.updated"
+#: Cache invalidation: a series changed (Phase E reference data).
+TOPIC_SERIES_UPDATED = "series.updated"
+#: Cache invalidation: a competition changed (Phase E reference data).
+TOPIC_COMPETITION_UPDATED = "competition.updated"
 
 _handlers: dict[str, list[Callable[[Any], None]]] = {}
 
@@ -76,6 +92,7 @@ def clear_subscriptions() -> None:
 
 
 __all__ = [
+    "TOPIC_COMPETITION_UPDATED",
     "TOPIC_CORRECTION_APPLIED",
     "TOPIC_CORRECTION_REQUESTED",
     "TOPIC_DELIVERY_APPENDED",
@@ -83,11 +100,18 @@ __all__ = [
     "TOPIC_DUPLICATE_REVIEWED",
     "TOPIC_INGESTION_COMPLETED",
     "TOPIC_INGESTION_FAILED",
+    "TOPIC_INNINGS_UPDATED",
     "TOPIC_MATCH_COMPLETED",
     "TOPIC_MATCH_REOPENED",
+    "TOPIC_MATCH_STATE_CHANGED",
+    "TOPIC_MATCH_UPDATED",
     "TOPIC_PLAYER_MERGED",
+    "TOPIC_PLAYER_UPDATED",
     "TOPIC_PROVIDER_MAP_VERIFIED",
     "TOPIC_SCORECARD_UPDATED",
+    "TOPIC_SERIES_UPDATED",
+    "TOPIC_TEAM_UPDATED",
+    "TOPIC_VENUE_UPDATED",
     "clear_subscriptions",
     "publish",
     "subscribe",

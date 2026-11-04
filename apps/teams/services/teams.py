@@ -9,6 +9,7 @@ from uuid import UUID
 from django.db import IntegrityError, transaction
 
 from apps.core.enums import TeamType
+from apps.core.events import TOPIC_TEAM_UPDATED, publish
 from apps.core.uuid7 import uuid7
 from apps.players.identity_scoring import normalize_name
 from apps.providers.models import DataProvider, ProviderEntityMap
@@ -70,6 +71,7 @@ def upsert_team(
             team = Team.objects.select_for_update().get(pk=map_row.internal_id)
             _apply(team, fields)
             team.save()
+            publish(TOPIC_TEAM_UPDATED, {"team_id": str(team.pk)})
             return team
 
         try:
@@ -98,6 +100,7 @@ def upsert_team(
             team = Team.objects.get(pk=map_row.internal_id)
             _apply(team, fields)
             team.save()
+        publish(TOPIC_TEAM_UPDATED, {"team_id": str(team.pk)})
         return team
 
 

@@ -208,8 +208,36 @@ INGEST_LATENCY = metric(
 )
 FRESHNESS_ALERTS = metric("freshness_alerts_total", "Stale live matches observed")
 
+# Phase E — cache + realtime observability (PERFORMANCE §12, SECURITY §8).
+CACHE_HITS = metric("cache_hits_total", "Read-through cache hits", labelnames=("namespace",))
+CACHE_MISSES = metric("cache_misses_total", "Read-through cache misses", labelnames=("namespace",))
+CACHE_STALE = metric(
+    "cache_stale_served_total", "Stale entries served while revalidating", labelnames=("namespace",)
+)
+CACHE_DEGRADED = metric(
+    "cache_degraded_total", "Requests served without the cache (breaker open or error)"
+)
+CACHE_INVALIDATIONS = metric(
+    "cache_invalidations_total", "Cache namespaces invalidated by a domain event"
+)
+CACHE_PURGES = metric("cache_purges_total", "Surrogate-key purges sent to a CDN")
+CACHE_BUILD_SECONDS = metric(
+    "cache_build_seconds", "Time spent rebuilding a cache entry", kind="histogram"
+)
+CACHE_BREAKER_OPEN = metric(
+    "cache_breaker_open", "Local cache breaker state (0=closed, 1=open)", kind="gauge"
+)
+
 __all__ = [
     "BREAKER_STATE",
+    "CACHE_BREAKER_OPEN",
+    "CACHE_BUILD_SECONDS",
+    "CACHE_DEGRADED",
+    "CACHE_HITS",
+    "CACHE_INVALIDATIONS",
+    "CACHE_MISSES",
+    "CACHE_PURGES",
+    "CACHE_STALE",
     "CORRECTIONS",
     "DELIVERIES_PER_MINUTE",
     "DLQ_DEPTH",

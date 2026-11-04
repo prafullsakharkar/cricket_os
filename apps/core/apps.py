@@ -38,3 +38,11 @@ class CoreConfig(AppConfig):
             ensure_cricket_schema,
             dispatch_uid="apps.core.ensure_cricket_schema",
         )
+        # Phase E: map domain events to cache namespaces. Imported lazily so
+        # core stays importable without Django settings (pure scoring suite).
+        if getattr(self, "_cache_ready_done", False):
+            return
+        from apps.core.cache.invalidation import register_defaults
+
+        register_defaults()
+        self._cache_ready_done = True
