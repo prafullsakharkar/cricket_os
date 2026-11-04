@@ -162,6 +162,12 @@ def _isolate_event_subscriptions() -> Iterator[None]:
 
     invalidation.resubscribe()
     invalidation.configure_purger(purger.NoopCachePurger())
+    # Fresh rate-limit buckets per test (the in-process test backend must not
+    # accumulate across tests sharing a client IP).
+    from apps.core.throttling import reset_limiter
+
+    reset_limiter()
     yield
     events.clear_subscriptions()
     invalidation.configure_purger(purger.NoopCachePurger())
+    reset_limiter()

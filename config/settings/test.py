@@ -40,6 +40,10 @@ REST_FRAMEWORK = {
 
 THROTTLE_ANON = env("THROTTLE_ANON", default="10000/min")
 
+# Phase E: bucket store lives in-process so the throttling suite needs no
+# Redis, and the conftest resets it per test (no cross-test accumulation).
+RATELIMIT_BACKEND = "in_process"
+
 # Serve the OpenAPI schema in tests (schemathesis contract tests read it).
 ENABLE_API_SCHEMA = True
 

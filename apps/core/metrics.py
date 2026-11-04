@@ -227,6 +227,14 @@ CACHE_BUILD_SECONDS = metric(
 CACHE_BREAKER_OPEN = metric(
     "cache_breaker_open", "Local cache breaker state (0=closed, 1=open)", kind="gauge"
 )
+# Throttling (API_SPEC §7).
+RATE_LIMIT_DENIED = metric(
+    "rate_limit_denied_total", "Requests denied by the token-bucket limiter", labelnames=("scope",)
+)
+RATE_LIMIT_FALLBACK = metric(
+    "rate_limit_fallback_total",
+    "Requests limited by the per-process fallback store (primary store down)",
+)
 
 __all__ = [
     "BREAKER_STATE",

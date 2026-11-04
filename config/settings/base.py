@@ -259,9 +259,7 @@ RATELIMIT_REDIS_URL = env("RATELIMIT_REDIS_URL", default=_url_with_db(REDIS_URL,
 # Bounded client timeouts: a slow Redis degrades a feature, never a request.
 REDIS_SOCKET_TIMEOUT_SECONDS = env.float("REDIS_SOCKET_TIMEOUT_SECONDS", default=0.25)
 REDIS_CONNECT_TIMEOUT_SECONDS = env.float("REDIS_CONNECT_TIMEOUT_SECONDS", default=0.5)
-REDIS_HEALTH_CHECK_INTERVAL_SECONDS = env.int(
-    "REDIS_HEALTH_CHECK_INTERVAL_SECONDS", default=30
-)
+REDIS_HEALTH_CHECK_INTERVAL_SECONDS = env.int("REDIS_HEALTH_CHECK_INTERVAL_SECONDS", default=30)
 REDIS_MAX_CONNECTIONS = env.int("REDIS_MAX_CONNECTIONS", default=100)
 # Header carrying a response's surrogate keys (CDN purge tags). Configurable
 # because CDN providers allow renaming it; see docs/REALTIME_AND_CACHING.md.
@@ -273,6 +271,20 @@ TRUSTED_PROXY_HOPS = env.int("TRUSTED_PROXY_HOPS", default=0)
 # CDN purge endpoint (``PURGE`` by surrogate key). Empty = no CDN: origin
 # invalidation is handled by the version-bump registry and this hook is a no-op.
 CACHE_PURGE_URL = env("CACHE_PURGE_URL", default="")
+
+# Token-bucket throttling (API_SPEC §7): scope -> (tokens/second, burst).
+# ``deliveries`` (ball-level) is stricter than the generous default; the
+# SSE/WS connect endpoints add their own connection caps (Groups 7/8).
+RATELIMIT_RATES = {
+    "default": (10.0, 120.0),
+    "deliveries": (2.0, 20.0),
+}
+# Backend for the bucket store: ``redis`` (the ``ratelimit`` role) or
+# ``in_process`` (tests; also the degraded-mode fallback at runtime).
+RATELIMIT_BACKEND = env("RATELIMIT_BACKEND", default="redis")
+# Optional per-API-key buckets: the header to read the key from. Empty disables
+# the key hook entirely (no key issuance/user accounts in scope).
+RATELIMIT_KEY_HEADER = env("RATELIMIT_KEY_HEADER", default="")
 
 CACHES = {
     "default": {

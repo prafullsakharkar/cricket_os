@@ -22,10 +22,12 @@ from typing import Any, ClassVar
 
 from django.conf import settings
 from django.http import HttpResponse
+from rest_framework.response import Response
 
 from apps.core.cache import keys, policy, store
 from apps.core.cache.policy import CachePlan
 from apps.core.http import compute_etag
+from apps.core.throttling import TokenBucketThrottle
 
 
 def surrogate_header_name() -> str:
@@ -60,6 +62,19 @@ class CachedReadMixin:
 
     #: Resource namespace (``match:shell``, ``matches:live``, ``teams`` …).
     cache_namespace: ClassVar[str] = ""
+
+    #: Token-bucket throttle scope (API_SPEC §7); the ``deliveries`` view
+    #: overrides this with a stricter bucket.
+    throttle_scope: ClassVar[str] = "default"
+
+    def get_throttles(self) -> list[Any]:
+        """Every cached read view is token-bucket throttled.
+
+        Overrides ``APIView.get_throttles`` so the throttle applies before the
+        cache lookup (cache hits are rate-limited too) without declaring a
+        ``throttle_classes`` attribute that conflicts with DRF's.
+        """
+        return [TokenBucketThrottle()]
 
     def cache_parts(self, request: Any, *args: Any, **kwargs: Any) -> tuple[str, ...]:
         """Path parts that identify the resource (default: none)."""
@@ -96,34 +111,78 @@ class CachedReadMixin:
         )
 
     def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
-        # DRF sets these inside its own dispatch; cache_plan/cache_key need
-        # them earlier, so mirror the assignment.
+        """DRF lifecycle with the cache inserted between checks and handler.
+
+        Mirror ``APIView.dispatch`` so the throttle/authentication checks run
+        *before* the cache lookup (cache hits are rate-limited too) and every
+        exception — including ``Throttled`` — is enveloped by the DRF handler.
+        The handler runs only on a cache miss.
+        """
         self.args = args
         self.kwargs = kwargs
-        key = self.cache_key(request, *args, **kwargs)
-        if key is None:
-            return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
+        # The concrete view base (ListAPIView/RetrieveAPIView/APIView) provides
+        # these members; the mixin is typed independently so they are ignored.
+        request = self.initialize_request(request, *args, **kwargs)  # type: ignore[attr-defined]
+        self.request = request
+        self.headers = self.default_response_headers  # type: ignore[attr-defined]
 
-        def build() -> CachedPayload:
-            return self._render_payload(request, args, kwargs, key)
+        try:
+            self.initial(request, *args, **kwargs)  # type: ignore[attr-defined]
+        except Exception as exc:
+            response = self.handle_exception(exc)  # type: ignore[attr-defined]
+            self.response = self.finalize_response(  # type: ignore[attr-defined]
+                request, response, *args, **kwargs
+            )
+            return self.response
 
-        result = store.get_or_build(
-            key,
-            build,
-            plan=self.cache_plan,
-            event_seq=lambda: getattr(self, "_event_seq", None),
+        not_allowed = "http_method_not_allowed"
+        handler = getattr(self, request.method.lower(), getattr(self, not_allowed))
+        try:
+            key = self.cache_key(request, *args, **kwargs)
+            if key is None:
+                response = handler(request, *args, **kwargs)
+            else:
+
+                def build() -> CachedPayload:
+                    return self._render_payload(handler, request, args, kwargs, key)
+
+                result = store.get_or_build(
+                    key,
+                    build,
+                    plan=self.cache_plan,
+                    event_seq=lambda: getattr(self, "_event_seq", None),
+                )
+                response = self._respond(request, result.value)
+        except Exception as exc:
+            response = self.handle_exception(exc)  # type: ignore[attr-defined]
+
+        self.response = self.finalize_response(  # type: ignore[attr-defined]
+            request, response, *args, **kwargs
         )
-        return self._respond(request, result.value)
+        return self.response
 
     def _render_payload(
         self,
+        handler: Any,
         request: Any,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         key: keys.CacheKey,
     ) -> CachedPayload:
-        """Run the view, render the response, and capture it for the cache."""
-        response = super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
+        """Run the view handler, render the response, and capture it."""
+        response = handler(request, *args, **kwargs)
+        if isinstance(response, Response):
+            # The handler returns an un-finalized DRF Response; give it the
+            # negotiated renderer (as ``finalize_response`` would) so
+            # ``rendered_content`` works below.
+            if not getattr(request, "accepted_renderer", None):
+                neg = self.perform_content_negotiation(  # type: ignore[attr-defined]
+                    request, force=True
+                )
+                request.accepted_renderer, request.accepted_media_type = neg
+            response.accepted_renderer = request.accepted_renderer
+            response.accepted_media_type = request.accepted_media_type
+            response.renderer_context = self.get_renderer_context()  # type: ignore[attr-defined]
         status = response.status_code
         # Accessing ``rendered_content`` is what sets ``Content-Type`` on a DRF
         # Response, so force the render before reading the header.

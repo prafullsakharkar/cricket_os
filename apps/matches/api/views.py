@@ -184,6 +184,8 @@ class DeliveriesView(_MatchCachedView):
     """
 
     cache_namespace = "match:deliveries"
+    # Ball-level endpoint: stricter token bucket than the default scope (§7).
+    throttle_scope = "deliveries"
 
     def cache_parts(self, request: Any, *args: Any, **kwargs: Any) -> tuple[str, ...]:
         return (kwargs["pk"], str(kwargs["innings_number"]))
