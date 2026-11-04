@@ -231,19 +231,40 @@ responses also carry the source local date/time and timezone.
 - **Cache:** `max-age=60`. **Source:** provider-supplied (marked
   `meta.source="provider"`).
 
-### 3.8 Real-time `WS /api/v1/ws/matches/{id}`
+### 3.8 Real-time `WS /api/v1/ws/matches/{id}` (and SSE)
 
-- **Protocol:** client subscribes; server pushes events:
-  `delivery.appended`, `innings.updated`, `match.state_changed`,
-  `match.completed`, `correction.applied`.
-- **`seq`:** every event carries a **monotonic per-match** sequence
-  (`match_event_log.seq`), distinct from the per-innings `delivery_seq`.
-- **Recovery:** on reconnect the client sends `last_seq`; the server replays the
-  retained `match_event_log` rows for the match. Events are retained for a
-  configurable window after completion (default 24 h); if `last_seq` predates the
-  retained range the server returns **`resync_required`**, prompting a REST
-  refetch of the current state.
-- **SSE alternative:** `/sse/matches/{id}` for one-way scoreboards.
+Two transports, one contract (implemented in Phase E; full wire details in
+[FRONTEND_CONTRACT.md](FRONTEND_CONTRACT.md)):
+
+- **`WS /api/v1/ws/matches/{id}`** — bidirectional WebSocket; server pushes
+  events as JSON text messages.
+- **`GET /api/v1/sse/matches/{id}`** — one-way SSE feed (plain HTTP); the same
+  frames as `id:`/`event:`/`data:` blocks. Prefer for scoreboards (cheaper than
+  WS); SSE auto-reconnects with `Last-Event-ID`.
+
+**Frames.** Every event is `{seq, event_type, match_id, payload, created_at}`
+with a **monotonic per-match** `seq` (`match_event_log.seq`), distinct from the
+per-innings `delivery_seq`. Event types: `delivery.appended`, `innings.updated`,
+`match.state_changed`, `match.completed`, `correction.applied`; control frames
+`batch` (coalesced burst — `batch.seq` is the maximum), `resync_required`,
+`server.draining`. Ordinary deltas coalesce on a ≤1 s server tick; corrections
+and terminal transitions flush immediately.
+
+**Recovery (exactly once).** The client subscribes with the REST snapshot's
+`meta.event_seq` (or a reconnect's last seen `seq`) — SSE via `Last-Event-ID` or
+`from_seq`, WS via `from_seq` — and the server replays the retained
+`match_event_log` rows after that position. Events are retained for a
+configurable window after completion (default 24 h); if the position predates
+the retained range the server delivers **`resync_required`**, prompting a REST
+refetch of the current state. No gaps, no duplicates.
+
+**Policy.** Cross-origin streams are rejected (SSE `403 origin_not_allowed`,
+WS close `4403`) unless same-origin or on `REALTIME_ALLOWED_ORIGINS`; connection
+caps (per-IP 8, per-match 2000, per-node 10000) reject with SSE `429
+connection_limit` / WS close `4429`. WS close codes: `1000` normal, `1001`
+draining, `1011` internal error, `4400` malformed message, `4403` origin,
+`4409` message too large, `4429` caps. Architecture in
+[REALTIME_AND_CACHING.md](REALTIME_AND_CACHING.md).
 
 ---
 

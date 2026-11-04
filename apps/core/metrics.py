@@ -227,7 +227,7 @@ CACHE_BUILD_SECONDS = metric(
 CACHE_BREAKER_OPEN = metric(
     "cache_breaker_open", "Local cache breaker state (0=closed, 1=open)", kind="gauge"
 )
-# Realtime fan-out (API_SPEC §3.8, PERFORMANCE §8, SECURITY §11).
+# Realtime fan-out (API_SPEC §3.8, PERFORMANCE §8, SECURITY §8).
 REALTIME_CONNECTIONS = metric(
     "realtime_connections", "Subscribed connections on this node", kind="gauge"
 )

@@ -28,11 +28,23 @@ satisfies Phase 10 of the brief and is referenced from the README.
 ## 2. API abuse prevention
 
 - Token-bucket rate limits per IP and per API key; stricter buckets on
-  ball-by-ball/commentary endpoints.
+  ball-by-ball/commentary endpoints. Limits **fail open** (availability over
+  enforcement): a broken bucket store degrades to a per-process fallback bucket
+  and a metric, never a `5xx` storm. `429`s carry `Retry-After`.
 - WAF/edge protection in front of the app; bot management for public endpoints.
 - Request-size and parameter allow-listing; cursor validation; pagination caps.
 - No verbose errors that leak internals; generic `5xx` to clients, detailed logs
   server-side.
+- **Realtime transports (Phase E)** — cross-origin WS/SSE streams are rejected
+  (SSE `403 origin_not_allowed`, WS close `4403`) unless same-origin or on the
+  `REALTIME_ALLOWED_ORIGINS` allowlist; connection caps (per-IP 8, per-match
+  2000, per-node 10000) reject with `429 connection_limit` / WS close `4429`
+  and are checked **before** a subscription is created (a denied client consumes
+  no hub state). The client IP honours `TRUSTED_PROXY_HOPS` (0 = ignore
+  `X-Forwarded-For`), so spoofed headers cannot switch IP buckets. WS client
+  messages are size-limited (4096 B) and frame-validated (close `4409`/`4400`).
+  Full details in [REALTIME_AND_CACHING.md](REALTIME_AND_CACHING.md) and
+  [FRONTEND_CONTRACT.md](FRONTEND_CONTRACT.md).
 
 ## 3. Provider credential management
 
@@ -87,8 +99,23 @@ satisfies Phase 10 of the brief and is referenced from the README.
 - **Application:** request latency/error SLIs, 5xx rate, throttle rate.
 - **Ingestion:** provider lag, DLQ depth, correction rate, circuit-breaker state.
 - **Data freshness:** per-live-match `freshness_seconds`; alert > 60 s.
+- **Realtime & caching (Phase E):** `realtime_connections`, `realtime_degraded`,
+  `realtime_dropped_frames_total`, `realtime_gap_backfills_total`,
+  `realtime_resyncs_total`, `realtime_cap_denied_total`,
+  `cache_hits/misses` (namespaced), `cache_degraded_total`,
+  `cache_breaker_open`; alerts in `ops/alerts/realtime_alerts.yml`
+  (`RealtimeDegraded`, `RealtimeDroppedHigh`, `RealtimeGapBackfills`,
+  `RealtimeResyncsHigh`, `RealtimeCapDeniedHigh`, `RealtimeConnectionsNearCap`,
+  `CacheBreakerOpen`, `CacheDegraded`, `CacheMissRatioHigh`).
 - **Alerts** route to on-call with runbooks; every alert maps to an actionable
-  runbook (see §10).
+  runbook (see §10). Both alert files (`ops/alerts/live_alerts.yml`,
+  `ops/alerts/realtime_alerts.yml`) are validated by a contract test against
+  the registered metric names and `docs/RUNBOOKS.md` headings.
+- **Reliability posture (Phase E):** the cache breaker fails **open** (reads
+  build directly, never block); realtime Redis pub/sub failure degrades to
+  polling the durable `match_event_log` (`realtime_degraded`) and recovers
+  automatically; the event log is the source of truth, so no event is
+  permanently lost and clients heal via seq-based replay.
 
 ## 9. Data quality & correctness controls
 

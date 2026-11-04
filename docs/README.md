@@ -6,12 +6,10 @@ ESPNcricinfo and Dream11. It contains research, domain modelling, database
 design, scoring rules, architecture, API, ingestion, performance, security,
 testing, a phased roadmap, and a risk register.
 
-> **Status:** Research + design only. No application code has been written.
-> Implementation begins with the non-engineering
-> [Phase 0 (licensing gate)](CRICKET_IMPLEMENTATION_ROADMAP.md), then
-> [Phase A (foundation)](CRICKET_IMPLEMENTATION_ROADMAP.md) with the
-> [Phase A+ pure scoring engine](CRICKET_IMPLEMENTATION_ROADMAP.md) running as a
-> parallel track immediately after it.
+> **Status:** Phases **A–E implemented** (foundation, reference data, historical
+> import, live matches, frontend APIs & real-time). Phases 0 (licensing gate),
+> F (statistics/analytics), G (performance & production) and H (fantasy) remain
+> on the [roadmap](CRICKET_IMPLEMENTATION_ROADMAP.md).
 
 ## Document map
 
@@ -32,7 +30,9 @@ testing, a phased roadmap, and a risk register.
 | 12 | [CRICKET_SECURITY_AND_RELIABILITY.md](CRICKET_SECURITY_AND_RELIABILITY.md) | Auth/RBAC, secrets, audit, backups/DR, data quality, licensing-vs-access (Phase 10) |
 | 13 | [CRICKET_RISKS_AND_ASSUMPTIONS.md](CRICKET_RISKS_AND_ASSUMPTIONS.md) | Risks, licensing dependencies, open questions, task checklist |
 | 14 | [LIVE_INGESTION.md](LIVE_INGESTION.md) | Phase D live-ingestion design: state machine, event log, polling/push, breaker, adapter contract, flags |
-| 15 | [RUNBOOKS.md](RUNBOOKS.md) | Runbooks for every live-ingestion alert (provider outage, DLQ, correctness, realtime gap) |
+| 15 | [RUNBOOKS.md](RUNBOOKS.md) | Runbooks for every live-ingestion **and realtime/cache** alert (provider outage, DLQ, correctness, realtime gap, degraded, backpressure, caps, cache breaker) |
+| 16 | [FRONTEND_CONTRACT.md](FRONTEND_CONTRACT.md) | Phase E wire contract: frames, transports, recovery/close codes, Origin + caps, client checklist |
+| 17 | [REALTIME_AND_CACHING.md](REALTIME_AND_CACHING.md) | Phase E architecture: Redis roles, cache layer, realtime pipeline, throttling, observability, settings |
 
 ## Ground rules used throughout
 
@@ -60,6 +60,39 @@ testing, a phased roadmap, and a risk register.
   [CRICKET_IMPLEMENTATION_ROADMAP.md](CRICKET_IMPLEMENTATION_ROADMAP.md).
 
 ## Revision history
+
+### 2026-11-05 — Phase E (frontend APIs & real-time) implemented
+
+- **New `FRONTEND_CONTRACT.md`** — the client-facing wire contract: both
+  transports + the parity rule, frame schema, event types, coalescing,
+  exactly-once recovery via `meta.event_seq`/`last_seq`, `resync_required`,
+  `server.draining`, WS close codes, Origin + connection caps, client checklist.
+- **New `REALTIME_AND_CACHING.md`** — the implementation architecture: Redis
+  roles, the key-versioned cache layer + state-dependent policy + invalidation
+  registry + CDN purge, `meta.event_seq` handoff, the realtime pipeline
+  (broker/hub/transports/security/composition root), throttling, observability,
+  settings reference, load budgets.
+- **CRICKET_API_SPECIFICATION.md** — §3.8 rewritten for the implemented SSE +
+  WS contract (frames, batch, close codes, policy) with pointers to
+  FRONTEND_CONTRACT / REALTIME_AND_CACHING.
+- **CRICKET_PERFORMANCE_AND_SCALING.md** — §8 updated: degraded polling,
+  backpressure, connection caps, event-log-as-truth, load budgets.
+- **CRICKET_BACKEND_ARCHITECTURE.md** — module catalog rows for `core` (cache/
+  streaming/throttling/metrics) and `realtime` (hub/broker/security, core-only);
+  directory structure for `core/cache` + `realtime` internals.
+- **CRICKET_SECURITY_AND_RELIABILITY.md** — §2 realtime transport security
+  (Origin, caps, message limits); §8 realtime/cache alerts + fail-open
+  reliability posture.
+- **CRICKET_TESTING_STRATEGY.md** — tooling table + §11/§12 reflect the
+  implemented realtime suites (hand-rolled ASGI communicators) and the CI load
+  smoke gate.
+- **CRICKET_DATA_INGESTION.md** — realtime hop described (broker → hub →
+  WS/SSE, degraded polling, log-as-truth).
+- **CRICKET_IMPLEMENTATION_ROADMAP.md** — Phase E marked implemented with the
+  delivered surface, acceptance evidence, and decisions/deferrals (F/G scope,
+  JWT/push/CDN-network out of scope).
+- **README.md** — status updated (Phases A–E implemented); document map rows 16
+  and 17 added.
 
 ### 2026-11-03 — Phase D (live matches) implemented
 
