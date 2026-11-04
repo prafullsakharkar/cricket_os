@@ -1,10 +1,11 @@
-"""Phase D: observability surfaces (SECURITY §8/§10, ROADMAP Phase D Group 9).
+"""Observability surfaces (SECURITY §8/§10, ROADMAP Phase D Group 9 + Phase E 10).
 
 * the internal ``/metrics`` exposition is settings-gated and renders the
   Prometheus text format (fallback facade in this offline image);
-* ``ops/alerts/live_alerts.yml`` parses as Prometheus rules and every alert
-  references a real registered metric and a runbook heading in
-  ``docs/RUNBOOKS.md`` (alert → runbook contract).
+* ``ops/alerts/*.yml`` parses as Prometheus rules and every alert references a
+  real registered metric and a runbook heading in ``docs/RUNBOOKS.md``
+  (alert → runbook contract) — live-ingestion rules (Phase D) and
+  realtime/cache rules (Phase E).
 """
 
 from __future__ import annotations
@@ -37,6 +38,16 @@ def test_metrics_endpoint_serves_prometheus_exposition() -> None:
         "shadow_verify_mismatches_total",
         "ingest_to_event_log_seconds",
         "event_publish_failures_total",
+        # Phase E realtime + caching surfaces.
+        "realtime_connections",
+        "realtime_degraded",
+        "realtime_dropped_frames_total",
+        "realtime_gap_backfills_total",
+        "realtime_resyncs_total",
+        "realtime_cap_denied_total",
+        "cache_hits_total",
+        "cache_breaker_open",
+        "cache_degraded_total",
     ):
         assert name in body
     assert "# TYPE" in body  # exposition format, not JSON
@@ -78,10 +89,35 @@ def test_metrics_facade_renders_after_observations() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _load_alerts() -> list[dict[str, object]]:
-    with Path("ops/alerts/live_alerts.yml").open(encoding="utf-8") as handle:
+def _load_alerts(path: str) -> list[dict[str, object]]:
+    with Path(path).open(encoding="utf-8") as handle:
         document = yaml.safe_load(handle)
     return [rule for group in document["groups"] for rule in group["rules"]]
+
+
+#: Alert -> exact rule set per file (protects against accidental rule edits).
+_ALERT_FILES: dict[str, set[str]] = {
+    "ops/alerts/live_alerts.yml": {
+        "LiveMatchStale",
+        "CircuitBreakerOpen",
+        "DLQDepthHigh",
+        "ShadowVerifyMismatch",
+        "IngestLatencyHigh",
+        "ProviderLagHigh",
+        "EventPublishFailures",
+    },
+    "ops/alerts/realtime_alerts.yml": {
+        "RealtimeDegraded",
+        "RealtimeDroppedHigh",
+        "RealtimeGapBackfills",
+        "RealtimeResyncsHigh",
+        "RealtimeCapDeniedHigh",
+        "RealtimeConnectionsNearCap",
+        "CacheBreakerOpen",
+        "CacheDegraded",
+        "CacheMissRatioHigh",
+    },
+}
 
 
 def _registered_metric_names() -> set[str]:
@@ -95,23 +131,10 @@ def _registered_metric_names() -> set[str]:
 
 
 def test_alert_rules_file_parses_and_cross_checks() -> None:
-    rules = _load_alerts()
-    assert rules, "no alert rules loaded"
-    expected = {
-        "LiveMatchStale",
-        "CircuitBreakerOpen",
-        "DLQDepthHigh",
-        "ShadowVerifyMismatch",
-        "IngestLatencyHigh",
-        "ProviderLagHigh",
-        "EventPublishFailures",
-    }
-    assert {rule["alert"] for rule in rules} == expected
-
     registered = _registered_metric_names()
 
     # Every metric referenced by an alert expression exists in the facade.
-    # Label names (match_id, provider, endpoint, le) are not metrics.
+    # Label names (match_id, provider, endpoint, le, instance) are not metrics.
     labels = {
         "by",
         "max",
@@ -123,24 +146,31 @@ def test_alert_rules_file_parses_and_cross_checks() -> None:
         "match_id",
         "provider",
         "endpoint",
+        "instance",
+        "humanizePercentage",
+        "value",
     }
     runbook_names = set()
-    for rule in rules:
-        expr = rule["expr"]
-        for candidate in re.findall(r"\b[a-z_][a-z0-9_]+(?:_bucket|_count|_sum)?\b", expr):
-            if candidate in labels:
-                continue
-            if candidate in registered:
-                continue
-            base = (
-                candidate.rsplit("_", 1)[0]
-                if candidate.endswith(("_bucket", "_count", "_sum"))
-                else candidate
-            )
-            assert base in registered, (
-                f"alert {rule['alert']} references unknown metric {candidate}"
-            )
-        runbook_names.add(rule["labels"]["runbook"])
+    for path, expected in _ALERT_FILES.items():
+        rules = _load_alerts(path)
+        assert rules, f"no alert rules loaded from {path}"
+        assert {rule["alert"] for rule in rules} == expected, path
+        for rule in rules:
+            expr = rule["expr"]
+            for candidate in re.findall(r"\b[a-z_][a-z0-9_]+(?:_bucket|_count|_sum)?\b", expr):
+                if candidate in labels:
+                    continue
+                if candidate in registered:
+                    continue
+                base = (
+                    candidate.rsplit("_", 1)[0]
+                    if candidate.endswith(("_bucket", "_count", "_sum"))
+                    else candidate
+                )
+                assert base in registered, (
+                    f"alert {rule['alert']} references unknown metric {candidate}"
+                )
+            runbook_names.add(rule["labels"]["runbook"])
 
     # Every alert maps to a runbook heading in docs/RUNBOOKS.md (headings are
     # Title Case; alert labels are lowercase identifiers).
