@@ -20,7 +20,11 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "cricket-test-cache",
-    }
+    },
+    "cache": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "cricket-test-cache-e",
+    },
 }
 
 # Tasks run inline and raise in the caller.

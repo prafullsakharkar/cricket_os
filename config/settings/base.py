@@ -8,9 +8,17 @@ All runtime configuration comes from the environment via ``django-environ``;
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
+
+
+def _url_with_db(url: str, db: int) -> str:
+    """Return ``url`` pointing at Redis logical database ``db``."""
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, f"/{db}", parts.query, parts.fragment))
+
 
 # --------------------------------------------------------------------------- #
 # Paths & environment
@@ -241,13 +249,36 @@ CRICSHEET_KEY_ALLOWLIST = ["key_opta", "key_pulse"]
 # --------------------------------------------------------------------------- #
 # Cache / Celery
 # --------------------------------------------------------------------------- #
+# One base URL; each logical role gets its own database by default so an
+# `allkeys-lru` cache eviction can never drop a Celery broker task or a rate
+# limit counter (Phase E task 1; docs/REALTIME_AND_CACHING.md).
+REDIS_URL = env("REDIS_URL")
+CACHE_REDIS_URL = env("CACHE_REDIS_URL", default=REDIS_URL)
+PUBSUB_REDIS_URL = env("PUBSUB_REDIS_URL", default=_url_with_db(REDIS_URL, 3))
+RATELIMIT_REDIS_URL = env("RATELIMIT_REDIS_URL", default=_url_with_db(REDIS_URL, 4))
+# Bounded client timeouts: a slow Redis degrades a feature, never a request.
+REDIS_SOCKET_TIMEOUT_SECONDS = env.float("REDIS_SOCKET_TIMEOUT_SECONDS", default=0.25)
+REDIS_CONNECT_TIMEOUT_SECONDS = env.float("REDIS_CONNECT_TIMEOUT_SECONDS", default=0.5)
+REDIS_HEALTH_CHECK_INTERVAL_SECONDS = env.int(
+    "REDIS_HEALTH_CHECK_INTERVAL_SECONDS", default=30
+)
+REDIS_MAX_CONNECTIONS = env.int("REDIS_MAX_CONNECTIONS", default=100)
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env("REDIS_URL"),
+        "LOCATION": CACHE_REDIS_URL,
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
         "KEY_PREFIX": "cricket",
-    }
+    },
+    # Phase E uses the `cache` alias explicitly; tests swap both aliases to
+    # LocMem so the cache suite needs no Redis.
+    "cache": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": CACHE_REDIS_URL,
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "KEY_PREFIX": "cricket",
+    },
 }
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL")
