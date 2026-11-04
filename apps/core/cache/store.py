@@ -147,11 +147,15 @@ def _spawn(fn: Callable[[], None]) -> None:
     threading.Thread(target=fn, name="cache-revalidate", daemon=True).start()
 
 
+def _resolve_plan(plan: CachePlan | Callable[[], CachePlan]) -> CachePlan:
+    return plan() if callable(plan) else plan
+
+
 def _build[T](
     rendered: str,
     key: keys.CacheKey,
     builder: Callable[[], T],
-    plan: CachePlan,
+    plan: CachePlan | Callable[[], CachePlan],
     event_seq: Callable[[], int | None] | None,
     clock: Callable[[], float],
 ) -> CacheResult:
@@ -174,6 +178,14 @@ def _build[T](
         value = builder()
         seq = event_seq() if event_seq is not None else None
         metrics.CACHE_BUILD_SECONDS.observe(max(0.0, clock() - started))
+
+        plan = _resolve_plan(plan)
+        if getattr(value, "cacheable", True) is False:
+            # 3xx/4xx/5xx and empty bodies are never stored: correctness must
+            # not depend on a cached error (a 404 must not outlive a match
+            # created seconds later). Callers signal this via a ``cacheable``
+            # attribute on the built value.
+            return CacheResult(value=value, hit=False, stale=False, event_seq=seq)
 
         soft = now + plan.redis_ttl
         hard = soft + (plan.swr or 0)
@@ -201,7 +213,7 @@ def _schedule_refresh[T](
     rendered: str,
     key: keys.CacheKey,
     builder: Callable[[], T],
-    plan: CachePlan,
+    plan: CachePlan | Callable[[], CachePlan],
     event_seq: Callable[[], int | None] | None,
     clock: Callable[[], float],
     scheduler: Callable[[Callable[[], None]], None],
@@ -245,13 +257,17 @@ def get_or_build[T](
     key: keys.CacheKey,
     builder: Callable[[], T],
     *,
-    plan: CachePlan,
+    plan: CachePlan | Callable[[], CachePlan],
     event_seq: Callable[[], int | None] | None = None,
     clock: Callable[[], float] = time.time,
     scheduler: Callable[[Callable[[], None]], None] = _spawn,
     allow_stale: bool = True,
 ) -> CacheResult:
-    """Return a cached value, building it via ``builder`` when needed."""
+    """Return a cached value, building it via ``builder`` when needed.
+
+    ``plan`` may be a callable so state-dependent views resolve the TTL only
+    when a build actually happens (never on a cache hit).
+    """
     if not breaker.allow_request():
         _refresh_breaker_metric()
         return _direct(builder, event_seq, clock)

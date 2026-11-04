@@ -81,8 +81,13 @@ def for_fixtures() -> CachePlan:
 
 
 def for_reference() -> CachePlan:
-    """Teams, venues, competitions: reference data changes rarely."""
-    return CachePlan(redis_ttl=3600, max_age=600, swr=600)
+    """Teams, venues, competitions: reference data changes rarely.
+
+    Matches API_SPECIFICATION §3.9 / PERFORMANCE §5.1 (``max-age=600``, no SWR):
+    these rows change only through steward-verified upserts, which invalidate
+    the version namespace directly.
+    """
+    return CachePlan(redis_ttl=3600, max_age=600, swr=None)
 
 
 def for_player() -> CachePlan:

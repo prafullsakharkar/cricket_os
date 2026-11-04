@@ -246,15 +246,26 @@ def test_meta_stale_when_provider_breaker_is_open() -> None:
     assert body["meta"]["stale"] is True
     assert all(item["stale"] is True for item in body["data"])
 
-    # A different provider's matches stay fresh.
+    # A different provider's matches stay fresh. The live feed is cached
+    # (seconds-level); a real ingestion publishes a state-changed event when a
+    # match enters live play, which invalidates the ``matches:live`` bucket.
+    # Mirror that (on_commit=False: this test runs inside a transaction) so the
+    # second read is a fresh build instead of the 5s-old cached page.
     provider = DataProvider.objects.create(name="Other", code="other")
     from tests.phase_c.factories import make_match
 
-    make_match(
+    match = make_match(
         status=MatchStatus.IN_PROGRESS,
         start_time_utc=_start(3),
         source_provider_id=provider.id,
         provider_match_id="other-1",
+    )
+    from apps.core import events
+
+    events.publish(
+        events.TOPIC_MATCH_STATE_CHANGED,
+        {"match_id": str(match.id)},
+        on_commit=False,
     )
     body2 = _client().get("/api/v1/matches/live").json()
     by_id = {item["id"]: item for item in body2["data"]}
@@ -296,8 +307,14 @@ def test_rendering_is_constant_query_count_no_n_plus_1() -> None:
         _client().get("/api/v1/matches/live", data={"limit": 10})
     small_queries = len(small.captured_queries)
 
+    # The first read populated the cache; the six new matches would each have
+    # invalidated the ``matches:live`` bucket in production, so bump it to make
+    # the second read a fresh build and keep the comparison build-vs-build.
+    from apps.core.cache import versions
+
     for i in range(3, 9):
         _match(status=MatchStatus.IN_PROGRESS, start_offset_hours=i)
+    versions.bump("matches:live")
     large = CaptureQueriesContext(connection)
     with large:
         _client().get("/api/v1/matches/live", data={"limit": 10})

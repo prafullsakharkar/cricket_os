@@ -159,6 +159,7 @@ class TestCompletedMatch:
             "ball_data": True,
             "commentary": False,
             "revision": self.ctx["match"].revision,
+            "event_seq": 0,
         }
         assert [i["innings_number"] for i in data["innings"]] == [1, 2]
 
@@ -307,7 +308,10 @@ class TestCompletedMatch:
     # -- cache policy ------------------------------------------------------- #
     def test_completed_match_cache_policy_and_etag_304(self) -> None:
         response = self.client.get(self.match_url)  # type: ignore[attr-defined]
-        assert response["Cache-Control"] == ("public, max-age=300, stale-while-revalidate=600")
+        assert response["Cache-Control"] == (
+            "public, max-age=300, s-maxage=3600, stale-while-revalidate=600, "
+            "stale-if-error=86400"
+        )
         etag = response["ETag"]
         assert etag.startswith('"') and etag.endswith('"')
 

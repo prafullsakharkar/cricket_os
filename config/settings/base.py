@@ -263,6 +263,9 @@ REDIS_HEALTH_CHECK_INTERVAL_SECONDS = env.int(
     "REDIS_HEALTH_CHECK_INTERVAL_SECONDS", default=30
 )
 REDIS_MAX_CONNECTIONS = env.int("REDIS_MAX_CONNECTIONS", default=100)
+# Header carrying a response's surrogate keys (CDN purge tags). Configurable
+# because CDN providers allow renaming it; see docs/REALTIME_AND_CACHING.md.
+CACHE_SURROGATE_HEADER = env("CACHE_SURROGATE_HEADER", default="Surrogate-Key")
 
 CACHES = {
     "default": {

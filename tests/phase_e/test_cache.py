@@ -123,7 +123,7 @@ def test_live_match_uses_live_plan_even_with_an_end_time() -> None:
 def test_plan_can_be_adapted_for_reference_data() -> None:
     reference = policy.for_reference().cache_control()
     fixtures = policy.for_fixtures().cache_control()
-    assert reference == "public, max-age=600, stale-while-revalidate=600"
+    assert reference == "public, max-age=600"
     assert fixtures == "public, max-age=30, stale-while-revalidate=60"
 
 

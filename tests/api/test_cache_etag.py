@@ -71,10 +71,15 @@ class TestETag:
         first_etag = api_client.get("/api/v1/teams")["ETag"]
 
         # second_team is created by the fixture BEFORE this test body runs, so
-        # create a third team here to change the list payload.
+        # create a third team here to change the list payload. Direct ORM
+        # writes bypass the event bus by design (Phase D constraint), so mirror
+        # the upsert service by publishing the change topic the cache registry
+        # subscribes to (on_commit=False: this test runs inside a transaction).
+        from apps.core import events
         from apps.teams.models import Team
 
-        Team.objects.create(name="Mexico", team_type="international")
+        team = Team.objects.create(name="Mexico", team_type="international")
+        events.publish(events.TOPIC_TEAM_UPDATED, {"team_id": str(team.pk)}, on_commit=False)
         after = api_client.get("/api/v1/teams").json()
         second_etag = api_client.get("/api/v1/teams")["ETag"]
 
