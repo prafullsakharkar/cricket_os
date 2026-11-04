@@ -118,6 +118,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 "apps/**/models.py" = ["DJ001", "RUF012"]
 # CI helper script (pre-existing) prints DDL to stdout by design.
 "scripts/**" = ["T201"]
+# The standalone reference client is a CLI tool that prints by design.
+"tools/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]

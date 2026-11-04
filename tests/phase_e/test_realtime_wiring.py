@@ -7,6 +7,10 @@ implementations. These tests lock that boundary and the fallback behaviour.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+from typing import Any
+
 import pytest
 
 from apps.core.streaming import StreamInfo
@@ -68,3 +72,72 @@ def test_asgi_composition_root_wires_matches_implementations() -> None:
     assert hub.policy is wired.get_policy()
     assert hub.active_match_ids() == []
     assert broker.degraded is False
+
+
+class _FakeBroker:
+    """Broker stand-in: ``run`` blocks until ``stop`` releases it."""
+
+    def __init__(self) -> None:
+        self.started = False
+        self.stopped = False
+        self._stop = asyncio.Event()
+
+    async def run(self) -> None:
+        self.started = True
+        await self._stop.wait()
+
+    async def stop(self) -> None:
+        self.stopped = True
+        self._stop.set()
+
+
+def _run(coro: Any) -> Any:
+    return asyncio.run(coro)
+
+
+def test_lifespan_startup_builds_and_runs_the_broker() -> None:
+    import config.asgi
+
+    async def scenario() -> None:
+        hub = object()
+        broker = _FakeBroker()
+        calls: list[int] = []
+
+        def factory() -> tuple[Any, Any, Any]:
+            calls.append(1)
+            return hub, broker, None
+
+        app = config.asgi._RealtimeLifespan(factory=factory)
+        inputs: asyncio.Queue[dict[str, str]] = asyncio.Queue()
+        outputs: asyncio.Queue[dict[str, str]] = asyncio.Queue()
+        task = asyncio.create_task(app({"type": "lifespan"}, inputs.get, outputs.put))
+        await inputs.put({"type": "lifespan.startup"})
+        assert (await asyncio.wait_for(outputs.get(), 1)) == {"type": "lifespan.startup.complete"}
+        await asyncio.sleep(0.05)  # let the broker task start
+        assert calls == [1]
+        assert broker.started is True
+        await inputs.put({"type": "lifespan.shutdown"})
+        assert (await asyncio.wait_for(outputs.get(), 1)) == {"type": "lifespan.shutdown.complete"}
+        assert broker.stopped is True
+        await task
+
+    _run(scenario())
+
+
+def test_lifespan_startup_failure_reports_and_terminates() -> None:
+    import config.asgi
+
+    async def scenario() -> None:
+        def bad_factory() -> Any:
+            raise RuntimeError("boom")
+
+        app = config.asgi._RealtimeLifespan(factory=bad_factory)
+        inputs: asyncio.Queue[dict[str, str]] = asyncio.Queue()
+        outputs: asyncio.Queue[dict[str, str]] = asyncio.Queue()
+        task = asyncio.create_task(app({"type": "lifespan"}, inputs.get, outputs.put))
+        await inputs.put({"type": "lifespan.startup"})
+        assert (await asyncio.wait_for(outputs.get(), 1)) == {"type": "lifespan.startup.failed"}
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(task, 1)
+
+    _run(scenario())
