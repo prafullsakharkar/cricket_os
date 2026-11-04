@@ -1,0 +1,22 @@
+# Phase C gate (`make test-phasec` / CI): the high-risk write path, the
+# engine-driven rebuild, and the Cricsheet mapper must hold >= 95% line AND
+# branch coverage. These are the files where a regression silently corrupts
+# stored data (append_or_revise), derived rows (rebuild), or the provider
+# mapping (cricsheet adapter/parser), so the bar is higher than the app-wide
+# gate.
+#
+# `include` (glob patterns) is used instead of `source` because coverage 7.x
+# treats a `source` entry ending in `.py` as a *package name* and reports
+# "never imported".
+[run]
+branch = true
+include =
+    */apps/deliveries/services/write.py
+    */apps/scorecards/services/rebuild.py
+    */apps/ingestion/adapters/cricsheet.py
+    */apps/ingestion/adapters/cricsheet_parse.py
+
+[report]
+fail_under = 95
+show_missing = true
+skip_covered = true

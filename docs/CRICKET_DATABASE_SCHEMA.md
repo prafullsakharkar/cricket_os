@@ -567,6 +567,7 @@ CREATE TABLE cricket.match (
   source_timezone    text,
   status             cricket.match_status NOT NULL DEFAULT 'SCHEDULED',
   status_detail      text,
+  state_title        text,
   result_type        cricket.result_type,
   result_text        text,
   toss_winner_team_id uuid REFERENCES cricket.team(id),
@@ -581,6 +582,7 @@ CREATE TABLE cricket.match (
   source_provider_id uuid,
   provider_updated_at timestamptz,
   ingested_at        timestamptz NOT NULL DEFAULT now(),
+  last_ingested_at   timestamptz,
   revision           integer NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX ux_match_provider
@@ -758,10 +760,14 @@ CREATE TABLE cricket.delivery (
   )
 ) PARTITION BY RANGE (match_date);
 
--- Rollover partitions (create ahead of time; a maintenance job pre-creates next month/year).
-CREATE TABLE cricket.delivery_2026 PARTITION OF cricket.delivery
-  FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
-CREATE TABLE cricket.delivery_default PARTITION OF cricket.delivery DEFAULT;
+-- NOTE (Phase C): there is deliberately NO DEFAULT partition and no
+-- pre-created yearly partition here. Yearly partitions are created on demand
+-- by deliveries.services.partitions.ensure_partition(year) (idempotent,
+-- race-safe), which the delivery write path calls before every insert. The
+-- original plan's catch-all DEFAULT partition is dropped by design so stray
+-- rows can never land in a silently-accepted partition (Phase C decisions in
+-- CRICKET_IMPLEMENTATION_ROADMAP.md). Pre-creation of next year's partition
+-- and archival of old partitions are Phase G tickets.
 
 -- Partition key (match_date) MUST be part of every unique index on a
 -- partitioned table. Services always address a delivery by
@@ -952,6 +958,12 @@ CREATE TABLE cricket.player_match_stat (
   fielding   jsonb NOT NULL DEFAULT '{}'::jsonb,
   source_provider_id uuid,
   computed_at timestamptz NOT NULL DEFAULT now(),
+  -- Phase C additions (brief requirement; recorded in the Phase C decisions):
+  -- is_partial flags matches imported through the summary-only path where
+  -- ball-dependent metrics are absent or estimated; revision tracks rebuilds
+  -- so a correction supersedes the previous stat row.
+  is_partial boolean NOT NULL DEFAULT false,
+  revision   integer NOT NULL DEFAULT 1,
   CONSTRAINT ux_player_match_stat UNIQUE (match_id, player_id)
 );
 CREATE INDEX ix_pms_player ON cricket.player_match_stat (player_id);
@@ -1196,6 +1208,7 @@ CREATE TABLE cricket.reconciliation_job (
   id uuid PRIMARY KEY, scope_key text NOT NULL, expected_state jsonb, observed_state jsonb,
   differences jsonb, status text NOT NULL DEFAULT 'open', created_at timestamptz NOT NULL DEFAULT now(),
   resolved_at timestamptz);
+CREATE INDEX ix_reconciliation_scope ON cricket.reconciliation_job (scope_key, status);
 
 CREATE TABLE cricket.data_correction (
   id uuid PRIMARY KEY, provider_id uuid REFERENCES cricket.data_provider(id),

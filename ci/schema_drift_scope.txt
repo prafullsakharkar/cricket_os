@@ -1,6 +1,9 @@
 # Tables compared by the migration-drift workflow (one per line).
 # Add a table here in the same PR that adds its Django model / migration.
 # Phase B: the 19 reference-data tables (DATABASE_SCHEMA §3.2–3.4, §3.8).
+# Phase C: the match/innings/delivery/scorecard/statistics/ops tables
+# (DATABASE_SCHEMA §3.5–3.8). `delivery` is compared at the partitioned-parent
+# level only (partition children are excluded by schema_manifest.sql).
 country
 governing_body
 venue
@@ -20,3 +23,26 @@ match_stage
 data_provider
 provider_entity_map
 audit_log
+match
+match_team
+toss
+match_player
+match_official
+match_result
+match_award
+innings
+innings_event
+innings_summary
+over
+delivery
+batting_entry
+bowling_entry
+fall_of_wicket
+partnership
+player_match_stat
+import_job
+ingestion_error
+sync_checkpoint
+data_correction
+match_event_log
+reconciliation_job

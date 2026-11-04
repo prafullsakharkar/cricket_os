@@ -63,6 +63,48 @@ def redis_client() -> object:
     return connection
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _flush_includes_unmanaged_app_tables() -> Iterator[None]:
+    """Make Django's ``flush`` include our unmanaged tables.
+
+    ``cricket.delivery`` (partitioned) is unmanaged, so Django's ``flush``
+    omits it — but it has FKs INTO ``player``/``match``/``innings``, so a
+    plain ``TRUNCATE`` without ``CASCADE`` (what TransactionTestCase teardown
+    issues) fails on those tables. Patching the flush command's ``sql_flush``
+    to append the unmanaged app tables to the TRUNCATE list makes every
+    ``django_db(transaction=True)`` test teardown work. No-op when Django is
+    not configured (pure scoring suite under mutmut).
+    """
+    from django.conf import settings
+
+    if not settings.configured:
+        yield
+        return
+    import django.core.management.commands.flush as flush_command
+    from django.apps import apps
+
+    original = flush_command.sql_flush
+
+    def patched(style: object, connection: object, **kwargs: object) -> list[str]:
+        tables = set(connection.introspection.django_table_names(only_existing=True))  # type: ignore[attr-defined]
+        for app_config in apps.get_app_configs():
+            for model in app_config.get_models():
+                if not model._meta.managed and model._meta.db_table:
+                    tables.add(model._meta.db_table)
+        return connection.ops.sql_flush(  # type: ignore[attr-defined]
+            style,
+            sorted(tables),
+            reset_sequences=kwargs.get("reset_sequences", True),
+            allow_cascade=kwargs.get("allow_cascade", False),
+        )
+
+    flush_command.sql_flush = patched
+    try:
+        yield
+    finally:
+        flush_command.sql_flush = original
+
+
 @pytest.fixture(autouse=True)
 def _clear_cache() -> Iterator[None]:
     """Keep the in-memory cache isolated between tests.
@@ -103,5 +145,7 @@ def _isolate_event_subscriptions() -> Iterator[None]:
     events.subscribe(events.TOPIC_PLAYER_MERGED, handlers.on_player_merged)
     events.subscribe(events.TOPIC_PROVIDER_MAP_VERIFIED, handlers.on_provider_map_verified)
     events.subscribe(events.TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
+    events.subscribe(events.TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
+    events.subscribe(events.TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
     yield
     events.clear_subscriptions()

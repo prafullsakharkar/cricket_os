@@ -68,6 +68,16 @@ responses also carry the source local date/time and timezone.
 > `max-age=300, s-maxage=3600` with a strong `ETag`; they become `immutable` only
 > after a configurable **post-completion reconciliation window** (~24 h). A
 > correction purges by entity tag and changes the `ETag`. Full policy in §3.9.
+>
+> **Phase C implementation note.** The four match endpoints above
+> (`{id}`, `scorecard`, `innings`, `innings/{n}/deliveries`) are live. They emit
+> `public, max-age=300, stale-while-revalidate=600` for terminal matches and
+> `public, max-age=5, stale-while-revalidate=5` for live ones, with a strong
+> `ETag` (digest of the rendered payload) and `304` on matching
+> `If-None-Match`. The `s-maxage`/`immutable` directives are not emitted yet
+> (the cache mixin supports `max_age` + `swr`), and the `?fields=` sparse-field
+> option on `scorecard` is deferred. `/matches/live`, `/upcoming`, `/recent`
+> and the search/list endpoint remain Phase D.
 
 ### 2.2 Players
 
@@ -151,6 +161,16 @@ responses also carry the source local date/time and timezone.
 - **Auth:** none. **Rate limit:** 60 req/min/IP (burst 120).
 - **Query complexity:** single indexed scan on `(status, start_time_utc)` +
   LATERAL join to latest innings summary → O(live matches).
+
+> **Phase D implementation:** `GET /matches/live|upcoming|recent` are live
+> (cursor-paginated, state-dependent caches, strong `ETag`/`304`). Each item is
+> the §4.1 summary plus licence flags — `ball_data`, `commentary`,
+> `attribution` (from the provider policy, SECURITY §11) — and `stale`, which
+> is `true` when the feeding provider's circuit breaker is OPEN (the API serves
+> last-known-good instead of failing). `?format=` is a **filter**, not a
+> renderer selector: DRF's `URL_FORMAT_OVERRIDE` is moved to `?renderer=` so
+> the documented `?format=ODI` filters work (renderer choice stays on the
+> `Accept` header).
 
 ### 3.2 `GET /api/v1/matches/{id}/scorecard`
 

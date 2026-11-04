@@ -19,7 +19,9 @@ class AdministrationConfig(AppConfig):
             return
         from apps.administration import handlers
         from apps.core.events import (
+            TOPIC_CORRECTION_REQUESTED,
             TOPIC_DUPLICATE_REVIEWED,
+            TOPIC_MATCH_REOPENED,
             TOPIC_PLAYER_MERGED,
             TOPIC_PROVIDER_MAP_VERIFIED,
             subscribe,
@@ -28,4 +30,6 @@ class AdministrationConfig(AppConfig):
         subscribe(TOPIC_PLAYER_MERGED, handlers.on_player_merged)
         subscribe(TOPIC_PROVIDER_MAP_VERIFIED, handlers.on_provider_map_verified)
         subscribe(TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
+        subscribe(TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
+        subscribe(TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
         self._ready_done = True

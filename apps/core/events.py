@@ -24,6 +24,24 @@ TOPIC_PLAYER_MERGED = "player.merged"
 TOPIC_PROVIDER_MAP_VERIFIED = "provider_map.verified"
 #: Audit-worthy topic: a duplicate candidate was reviewed (rejected/merged).
 TOPIC_DUPLICATE_REVIEWED = "player_duplicate.reviewed"
+#: Tier-1: new deliveries were appended to an innings (live path).
+TOPIC_DELIVERY_APPENDED = "delivery.appended"
+#: Tier-1: previously-imported deliveries were superseded by a correction.
+TOPIC_DELIVERY_CORRECTED = "delivery.corrected"
+#: Tier-1: derived scorecard rows were rebuilt for an innings/match.
+TOPIC_SCORECARD_UPDATED = "scorecard.updated"
+#: Tier-2: a match completed; statistics may recompute.
+TOPIC_MATCH_COMPLETED = "match.completed"
+#: Tier-2: a data correction was applied to a completed match.
+TOPIC_CORRECTION_APPLIED = "correction.applied"
+#: Ingestion: an ImportJob completed (succeeded or partial); checkpoint advanced.
+TOPIC_INGESTION_COMPLETED = "ingestion.completed"
+#: Ingestion: an ImportJob failed permanently (a DLQ row was written).
+TOPIC_INGESTION_FAILED = "ingestion.failed"
+#: Audit-worthy topic: a terminal match was reopened for a provider correction.
+TOPIC_MATCH_REOPENED = "match.reopened"
+#: Audit-worthy topic: a steward requested a manual correction (queued/approved).
+TOPIC_CORRECTION_REQUESTED = "correction.requested"
 
 _handlers: dict[str, list[Callable[[Any], None]]] = {}
 
@@ -58,9 +76,18 @@ def clear_subscriptions() -> None:
 
 
 __all__ = [
+    "TOPIC_CORRECTION_APPLIED",
+    "TOPIC_CORRECTION_REQUESTED",
+    "TOPIC_DELIVERY_APPENDED",
+    "TOPIC_DELIVERY_CORRECTED",
     "TOPIC_DUPLICATE_REVIEWED",
+    "TOPIC_INGESTION_COMPLETED",
+    "TOPIC_INGESTION_FAILED",
+    "TOPIC_MATCH_COMPLETED",
+    "TOPIC_MATCH_REOPENED",
     "TOPIC_PLAYER_MERGED",
     "TOPIC_PROVIDER_MAP_VERIFIED",
+    "TOPIC_SCORECARD_UPDATED",
     "clear_subscriptions",
     "publish",
     "subscribe",

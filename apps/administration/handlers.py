@@ -13,7 +13,9 @@ from typing import Any
 
 from apps.administration.models import AuditLog
 from apps.core.events import (
+    TOPIC_CORRECTION_REQUESTED,
     TOPIC_DUPLICATE_REVIEWED,
+    TOPIC_MATCH_REOPENED,
     TOPIC_PLAYER_MERGED,
     TOPIC_PROVIDER_MAP_VERIFIED,
 )
@@ -57,4 +59,36 @@ def on_duplicate_reviewed(payload: Any) -> None:
     )
 
 
-__all__ = ["on_duplicate_reviewed", "on_player_merged", "on_provider_map_verified"]
+def on_match_reopened(payload: Any) -> None:
+    """Audit a terminal match being reopened for a provider correction."""
+    AuditLog.objects.create(
+        action=TOPIC_MATCH_REOPENED,
+        entity_type="match",
+        entity_id=payload["match_id"],
+        after={
+            "reason": payload.get("reason"),
+            "source": payload.get("source"),
+        },
+        actor_label=str(payload.get("actor")),
+    )
+
+
+def on_correction_requested(payload: Any) -> None:
+    """Audit a steward-requested manual correction (before it is applied)."""
+    AuditLog.objects.create(
+        action=TOPIC_CORRECTION_REQUESTED,
+        entity_type=payload.get("entity_type"),
+        entity_id=payload.get("entity_id"),
+        before=payload.get("old_value"),
+        after=payload.get("new_value"),
+        actor_label=str(payload.get("actor")),
+    )
+
+
+__all__ = [
+    "on_correction_requested",
+    "on_duplicate_reviewed",
+    "on_match_reopened",
+    "on_player_merged",
+    "on_provider_map_verified",
+]

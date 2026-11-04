@@ -1,0 +1,104 @@
+# Live-ingestion alert rules (SECURITY_AND_RELIABILITY §8/§10, ROADMAP Phase D).
+#
+# Every alert maps to a runbook in docs/RUNBOOKS.md. Thresholds are
+# configuration, not code — tune here, redeploy the rule group, never touch a
+# service. Metric names come from apps/core/metrics.py (the in-process facade
+# renders the same names).
+#
+# NOTE: this is a static rule file for the Prometheus-compatible operator.
+# `prometheus_client` is not installed in the offline build image, so these
+# rules are validated by tests/phase_d/test_observability.py (YAML parse +
+# metric-name/runbook cross-checks) rather than by a live Prometheus here.
+groups:
+  - name: live_ingestion
+    rules:
+      # A live match has not received a committed ingestion for a long time.
+      # The freshness monitor stamps match_freshness_seconds{match_id}.
+      - alert: LiveMatchStale
+        expr: |
+          max by (match_id) (match_freshness_seconds) > 90
+        for: 1m
+        labels:
+          severity: warning
+          runbook: "provider outage"
+        annotations:
+          summary: "Live match {{ $labels.match_id }} has not ingested for > 90s"
+          description: "The polling dispatcher or push receiver is not advancing {{ $labels.match_id }}. See runbook: provider outage."
+
+      # A provider circuit breaker is OPEN: reads still work (meta.stale) but
+      # ingestion is paused until the recovery timeout probes through.
+      - alert: CircuitBreakerOpen
+        expr: |
+          circuit_breaker_state{provider!="", endpoint!=""} == 2
+        for: 2m
+        labels:
+          severity: critical
+          runbook: "provider outage"
+        annotations:
+          summary: "Circuit breaker OPEN for provider {{ $labels.provider }} ({{ $labels.endpoint }})"
+          description: "The API is serving last-known-good with meta.stale=true. Confirm the provider incident, then let the breaker recover or reset it (admin)."
+
+      # The dead-letter queue is growing: permanent ingestion errors are not
+      # being triaged. Every DLQ row is redacted and provider-stamped.
+      - alert: DLQDepthHigh
+        expr: |
+          dlq_depth > 100
+        for: 10m
+        labels:
+          severity: warning
+          runbook: "dlq triage"
+        annotations:
+          summary: "DLQ depth is {{ $value }} (> 100 for 10m)"
+          description: "Inspect open IngestionError rows (stage labels on ingestion_errors_total), fix the mapping, re-drive idempotently."
+
+      # Shadow verification found derived rows that differed from a fresh
+      # engine rebuild. It healed them, but repeated mismatches indicate a
+      # systematic corruption path.
+      - alert: ShadowVerifyMismatch
+        expr: |
+          increase(shadow_verify_mismatches_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          runbook: "wrong score complaint"
+        annotations:
+          summary: "Shadow verify healed {{ $value }} mismatch(es) in 5m"
+          description: "Persisted Tier-1 rows differed from the engine. Healed automatically; investigate if it repeats."
+
+      # Ingest-to-event-log latency breaches the freshness budget.
+      - alert: IngestLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(ingest_to_event_log_seconds_bucket[5m]))) > 5
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "stuck checkpoint"
+        annotations:
+          summary: "P95 ingest-to-event-log latency is {{ $value }}s"
+          description: "Rebuilds or advisory-lock contention are slowing the write path. See runbook: stuck checkpoint."
+
+      # Provider lag (provider_updated_at vs ingested_at) exceeds the
+      # freshness SLA for the provider.
+      - alert: ProviderLagHigh
+        expr: |
+          max by (provider) (provider_lag_seconds) > 60
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "provider outage"
+        annotations:
+          summary: "Provider {{ $labels.provider }} lag is {{ $value }}s"
+          description: "The provider is slow or the poll cadence is wrong. See runbook: provider outage."
+
+      # Best-effort Redis publication is failing; the event log is durable so
+      # consumers can resync, but realtime freshness is at risk.
+      - alert: EventPublishFailures
+        expr: |
+          increase(event_publish_failures_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "realtime gap"
+        annotations:
+          summary: "Event publication to Redis failing ({{ $value }} in 15m)"
+          description: "Rows are durable in match_event_log; consumers must resync via events_since. See runbook: realtime gap."

@@ -61,11 +61,14 @@ markers = [
 ]
 
 [tool.coverage.run]
-# Default gate: apps/core + the six Phase B reference-data apps, combined
-# >= 90% line + branch (`make test` / CI). apps/scoring has its own stricter
-# gate (>= 95% line + branch) run by `make test-scoring`, and the identity
-# engine (identity_scoring.py + services/merge.py) has a 100% line+branch
-# gate run by `make test-identity` (see .coveragerc-identity).
+# Default gate: apps/core + the Phase B reference-data apps + the Phase C
+# historical-data apps, combined >= 90% line + branch (`make test` / CI).
+# apps/scoring has its own stricter gate (>= 95% line + branch) run by
+# `make test-scoring`, the identity engine (identity_scoring.py +
+# services/merge.py) a 100% line+branch gate run by `make test-identity`
+# (see .coveragerc-identity), and the Phase C write path + rebuild + Cricsheet
+# mapper a >= 95% line+branch gate run by `make test-phasec`
+# (see .coveragerc-phasec).
 source = [
   "apps/core",
   "apps/venues",
@@ -74,6 +77,14 @@ source = [
   "apps/competitions",
   "apps/providers",
   "apps/administration",
+  "apps/matches",
+  "apps/innings",
+  "apps/deliveries",
+  "apps/scorecards",
+  "apps/statistics",
+  "apps/ingestion",
+  "apps/synchronization",
+  "apps/live",
 ]
 branch = true
 
@@ -150,11 +161,13 @@ name = "core is a leaf (imports no other first-party app)"
 type = "independence"
 modules = ["apps.core"]
 
-# Six-layer discipline (Phase B): selectors are read-optimised and must never
+# Six-layer discipline (Phase B+): selectors are read-optimised and must never
 # reach into services; the API layer never touches provider adapters; the
 # domain apps never import administration/ingestion/realtime; and the two
 # mutually-referencing model modules (teams <-> players) never import each
-# other's models directly (lazy string FKs only).
+# other's models directly (lazy string FKs only). Phase C extends the domain
+# list to the new apps and forbids the reverse imports (ingestion and
+# synchronization are allowed to import the domain, never the other way).
 [[tool.importlinter.contracts]]
 name = "selectors must not import services"
 type = "forbidden"
@@ -176,23 +189,25 @@ source_modules = [
   "apps.players",
   "apps.competitions",
   "apps.providers",
+  "apps.matches",
+  "apps.innings",
+  "apps.deliveries",
+  "apps.scorecards",
+  "apps.statistics",
+  "apps.synchronization",
 ]
 forbidden_modules = ["apps.administration", "apps.ingestion", "apps.realtime"]
 
+# Phase C: the delivery write path must never write derived scorecard rows
+# directly — that is the scorecards module's job (ARCHITECTURE §3).
 [[tool.importlinter.contracts]]
-name = "teams model module never imports players models"
+name = "deliveries must not write scorecard rows"
 type = "forbidden"
-source_modules = ["apps.teams.models"]
-forbidden_modules = ["apps.players.models"]
+source_modules = ["apps.deliveries"]
+forbidden_modules = ["apps.scorecards.models"]
 
-[[tool.importlinter.contracts]]
-name = "players model module never imports teams models"
-type = "forbidden"
-source_modules = ["apps.players.models"]
-forbidden_modules = ["apps.teams.models"]
-
-# Real contract for the pure scoring engine: no other first-party domain module
-# may be imported. `apps.core` remains the only permitted first-party dependency.
+# Phase C: the scoring engine stays pure — nothing in it may import Django or
+# any other first-party module except apps.core.
 [[tool.importlinter.contracts]]
 name = "scoring may import only core"
 type = "forbidden"
@@ -213,6 +228,20 @@ forbidden_modules = [
   "apps.search",
 ]
 
+[[tool.importlinter.contracts]]
+name = "teams model module never imports players models"
+type = "forbidden"
+source_modules = ["apps.teams.models"]
+forbidden_modules = ["apps.players.models"]
+
+[[tool.importlinter.contracts]]
+name = "players model module never imports teams models"
+type = "forbidden"
+source_modules = ["apps.players.models"]
+forbidden_modules = ["apps.teams.models"]
+
+# Real contract for the pure scoring engine: no other first-party domain module
+# may be imported. `apps.core` remains the only permitted first-party dependency.
 # --------------------------------------------------------------------------- #
 # mutation testing (mutmut) — report-only; survivors are triaged in docs
 # --------------------------------------------------------------------------- #

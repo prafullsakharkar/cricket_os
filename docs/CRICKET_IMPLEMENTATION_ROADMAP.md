@@ -219,42 +219,122 @@ last run)**, pure scoring engine **≥ 95% (99.1%)**, identity engine
 
 ---
 
-## Phase C — Historical data
+## Phase C — Historical data — **DONE (8 commits `eaef83c`…, branch `phase-c`)**
 
 **Goal:** import historical matches, scorecards and stats from a
 licensed/authorized source; **integrate** the pure scoring engine (built in
 Phase A+) with persistence; backfill aggregates.
 
-- **Tasks**
-  1. Integrate the `scoring` engine (built in Phase A+) with persistence:
-     deliveries → innings totals, cards, partnerships, FOW.
-  2. Provider adapter (start with **Cricsheet** for historical; add managed
-     provider later) + normalizer + validation.
-  3. Import pipeline with idempotency, DLQ, checkpointing.
-  4. Models: `Match, MatchTeam, Toss, MatchPlayer, MatchOfficial, Innings,
-     Delivery, InningsEvent, Over, BattingEntry, BowlingEntry, FallOfWicket,
-     Partnership, InningsSummary, PlayerMatchStat`, plus `FormatCatalogue`
-     (seeded, DB doc §3.2) and `Squad`/`SquadMember`.
-  5. Rebuild pipeline (deliveries → cards → per-match stats).
-  6. Historical summaries (summary-only) import path.
-  7. Hand-written migrations the ORM cannot emit: `delivery` is
-     `Meta.managed=False`, and its `PARTITION BY RANGE (match_date)` definition,
-     partitions and partial/unique indexes are created by a **`RunSQL`**
-     migration; enum types and partial/expression indexes are likewise
-     hand-written. The `migration-drift` gate (Testing Strategy §13.1) must stay
-     green.
+Delivered as **8 reviewable group commits** on branch `phase-c`
+(Groups 1–8, `eaef83c`…). `make check` is green through the final commit:
+**797 suite tests + 172 scoring-engine tests** under four coverage gates —
+combined core + Phase B + Phase C apps **≥ 90% line+branch (94.7% at the last
+run)**, pure scoring engine **≥ 95% (99.1%)**, identity engine **100%
+line+branch**, and the new **Phase C gate** (write path + rebuild + Cricsheet
+mapper) **≥ 95% line+branch (100%)**.
+
+- **Tasks** (as delivered)
+  1. Models + partitions (G1): `match, match_team, toss, match_player,
+     match_result, innings, innings_event, innings_summary, delivery, over,
+     batting_entry, bowling_entry, fall_of_wicket, partnership, player_match_stat,
+     import_job, ingestion_error, sync_checkpoint, data_correction`. `delivery`
+     is `Meta.managed=False`, RANGE-partitioned by `match_date` with a composite
+     `(id, match_date)` PK and **no DEFAULT partition** — created by a
+     hand-written `RunSQL` migration; `ensure_partition(year)` creates yearly
+     partitions race-safely before every insert. `migration-drift` and
+     `schema-ddl` gates stay green.
+  2. Idempotent delivery write path (G2): `append_or_revise` is
+     order-independent, idempotent, partition-safe, validated at the boundary
+     (typed `DeliveryValidationError`s → DLQ) and supersedes changed balls
+     (`is_current=false` + `revision` bump + `DataCorrection` audit) in ONE
+     transaction; bulk fast path; `delivery.appended`/`delivery.corrected`
+     events (suppressible).
+  3. Engine-driven rebuild (G3): `rebuild_innings`/`rebuild_match` derive
+     summaries, cards, FOW, partnerships and the match result from current
+     deliveries in ONE transaction, revisioned and digest-deterministic
+     (unchanged data → same digest, no revision bump, no events);
+     `player_match_stat` builds exactly once on `match.completed`/`correction`.
+  4. Ingestion framework (G4): `ImportJob.idempotency_key` unique,
+     `IngestionError` DLQ (redacted payloads), `SyncCheckpoint` advanced after
+     commit, Celery exponential backoff (8 max retries) with crash resume;
+     `import_cricsheet` / `import_summary_cards` commands with `--dry-run`.
+  5. Cricsheet adapter (G5): pure parser (`cricsheet_parse.py`) + Django
+     pipeline (`cricsheet.py`) — local file → identity resolution → canonical
+     rows → Tier-1 rebuild → reconciliation (`reconciliation_mismatch` DLQ).
+     Idempotency key `cricsheet:<match_id>:<content_sha256>`.
+  6. Summary-only adapter (G6): `summary_cards.py` writes the provider's final
+     figures with `batch_complete=false`, never writes `delivery` rows and never
+     calls the engine; shared identity helpers (`adapters/identity.py`).
+  7. Read API (G7): `GET /matches/{id}`, `/scorecard`, `/innings`,
+     `/innings/{n}/deliveries` with state-dependent caching (`max-age=300`/`5`),
+     strong ETags + `304`, partition-pruned delivery reads (`is_current=true`
+     only), cursor on `delivery_seq`, `meta.ball_data/revision/commentary`.
+  8. Admin/DLQ + docs + gates (G8): admin for `ImportJob`, `IngestionError`
+     (mark-resolved/reopen DLQ actions), `SyncCheckpoint`, `DataCorrection`;
+     the `test-phasec` coverage gate; roadmap DONE block + decisions.
 - **Tables/modules:** `matches, innings, deliveries, scorecards, statistics,
-  ingestion` (`scoring` is built in Phase A+ and integrated here).
-- **Endpoints:** `GET /matches/{id}`, `/matches/{id}/scorecard`,
+  ingestion, synchronization` (`scoring` built in Phase A+ and integrated).
+- **Endpoints:** `GET /api/v1/matches/{id}/`, `/matches/{id}/scorecard`,
   `/matches/{id}/innings`, `/matches/{id}/innings/{n}/deliveries`.
-- **Tests:** engine integration + property tests; import counts; rebuild
-  determinism; summary-only path; idempotency; out-of-order; migration tests;
-  reference-DDL↔migration drift (`delivery` reported partitioned).
-- **Acceptance:** ≥ N historical matches imported with correct totals; scorecard
-  endpoints serve from DB; scoring tests green.
-- **Risks:** incomplete historical data (handled by `batch_complete`). **Effort:** 25.
-- **DoD:** a real historical match (e.g. an ODI) round-trips with totals matching
-  the provider's final card.
+- **Tests:** engine integration, rebuild determinism, idempotency + supersede,
+  partition safety, ingestion jobs/DLQ/checkpoints, both adapters end-to-end
+  (fixture round-trips incl. reconciliation + dry-run), the 4-endpoint read API
+  (envelope, cursor, ETag/304, state-dependent TTLs, ball_data flag),
+  migration/partition tests, and the Phase C coverage gate. Suite **797**.
+- **Acceptance:** the Cricsheet fixture (T20I India 8/1 → Australia 9/0, win by
+  10 wickets) and the summary fixture (ODI India 250/8 → Australia 251/5, win
+  by 5 wickets) round-trip through the pipeline and serve from the scorecard
+  endpoints with totals matching the provider cards. **DoD met.**
+- **Risks:** incomplete historical data handled by `batch_complete` (summary-only
+  innings are skipped by the engine; provider-written rows authoritative).
+  **Effort:** 25 planned; delivered within scope.
+- **Benchmarks:** pure-engine innings rebuild ≈ **3 ms** for a 300-ball ODI and
+  ≈ **6 ms** for a 600-ball Test innings (SCORING_ENGINE_API §rebuild; micro-
+  benchmarks run via `pytest -m benchmark` in `tests/scoring/test_benchmarks.py`).
+
+### Phase C decisions (conflicts resolved — recorded in the final report)
+
+- **C1 — `delivery` partitioning.** RANGE by `match_date` (= match START date,
+  never caller-supplied), composite PK `(id, match_date)`, **no DEFAULT
+  partition** (a typo'd year must fail loudly, not silently land in a catch-all);
+  `ensure_partition(year)` is race-safe (advisory lock) and called before every
+  insert. Hand-written `RunSQL` migration; `Meta.managed=False`.
+- **C2 — `Over` placement / columns.** `Over` lives in `apps/deliveries/models.py`
+  (not `scorecards`) and has **no `legal_balls` column** (the DDL doesn't define
+  one).
+- **C3 — stats module shape.** `apps/statistics/services.py` → `services/stats.py`
+  so import-linter contracts hold; wired in `apps.py` `ready()` with a
+  `_ready_done` guard.
+- **C4 — stats timestamps / summary-only.** `computed_at = match.end_time_utc or
+  timezone.now()`. An `is_partial` flag exists for summary-only matches but is
+  NOT wired from the summary adapter; the summary adapter does not publish
+  `match.completed` (per-match stats for summary-only cards are out of scope).
+- **C5 — bowler-credited wickets.** Only BOWLED/CAUGHT/CAUGHT_AND_BOWLED/LBW/
+  STUMPED/HIT_WICKET/MANKAD set `bowler_credited_wicket=True`. Cricsheet
+  `retired hurt`/`retired not out` are a retirement on the ball (is_wicket=False),
+  `retired out` is a RETIRED_OUT dismissal NOT credited to the bowler.
+- **C6 — engine innings status.** The engine leaves innings `status` at
+  IN_PROGRESS on match completion (only `match.status`/`match_result` become
+  terminal); tests do not pin innings status.
+- **C7 — idempotency keys without parsing.** The adapter factory computes the
+  key from the filename stem + raw sha256 (no parse); parsing happens inside the
+  stage, so a malformed file is a permanent `PipelineError` → DLQ, never a
+  retried transient.
+- **C8 — team types.** `TeamType` has no women's "domestic" label ⇒ women's
+  non-international teams map to `WOMEN_FRANCHISE` (`adapters/identity.py`).
+- **C9 — retry budget.** Global Celery `max_retries` 5→8; `ingest_job` uses
+  `autoretry_for=()` + explicit `self.retry()` so only transient pipeline
+  errors retry.
+- **C10 — deliveries cursor.** `Delivery._meta.pk` is the composite `pk` (no
+  single tiebreaker for the core `CursorPagination`), so the deliveries endpoint
+  uses its own cursor on `delivery_seq` alone (unique per innings), same
+  base64-json codec shape.
+- **C11 — cache policy implementation.** `_cache_ttl(match)`: terminal
+  `max-age=300, swr=600`; live `max-age=5, swr=5`. The spec's `s-maxage`/
+  `immutable` directives are documented but not emitted — `CacheControlMixin`
+  supports `max_age` + `swr` only (recorded limitation).
+- **C12 — dry-run.** `--dry-run` is threaded through BOTH adapters (parse +
+  validate only, `written=0`) so the commands' documented contract is real.
 
 ---
 
@@ -263,6 +343,15 @@ Phase A+) with persistence; backfill aggregates.
 **Goal:** live fixtures, match state, innings progression, deliveries, an event
 stream, and live ingestion from a **licensed managed provider** (or the
 ReplayAdapter until a licence exists).
+
+> **Status: implemented** (branch `phase-d`). All ten commit groups landed:
+> state machine, durable per-match event log + Redis publication, live write
+> path with per-innings rebuild + shadow verify, results/corrections/
+> reconciliation, polling + breaker + HMAC push framework, ReplayAdapter +
+> provider contract kit, licensing policy + retention, the
+> `/matches/live|upcoming|recent` feeds, `/metrics` + alert rules + runbooks,
+> and this doc set. See `docs/LIVE_INGESTION.md`. The licensed-provider
+> adapter itself remains gated on Phase 0 (`docs/PROVIDER_DECISION.md`).
 
 - **Tasks**
   1. Fixture sync (cron + push), match status transitions, state machine.

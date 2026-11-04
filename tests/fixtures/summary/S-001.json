@@ -1,0 +1,91 @@
+{
+  "match_id": "S-001",
+  "date": "2023-10-25",
+  "match_type": "ODI",
+  "gender": "male",
+  "overs_limit": 50,
+  "venue": "Narendra Modi Stadium",
+  "city": "Ahmedabad",
+  "teams": ["India", "Australia"],
+  "toss": {"winner": "India", "decision": "bat"},
+  "result": {
+    "winner": "Australia",
+    "result_type": "WIN",
+    "margin_type": "wickets",
+    "margin_value": 5
+  },
+  "players": {
+    "India": [
+      "Rohit Sharma",
+      "Shubman Gill",
+      "Virat Kohli",
+      "Suryakumar Yadav",
+      "KL Rahul",
+      "Hardik Pandya",
+      "Ravindra Jadeja",
+      "Jasprit Bumrah",
+      "Mohammed Shami",
+      "Kuldeep Yadav",
+      "Mohammed Siraj"
+    ],
+    "Australia": [
+      "David Warner",
+      "Mitchell Marsh",
+      "Steve Smith",
+      "Glenn Maxwell",
+      "Alex Carey",
+      "Mitchell Starc",
+      "Pat Cummins",
+      "Josh Hazlewood",
+      "Adam Zampa",
+      "Marcus Stoinis",
+      "Cameron Green"
+    ]
+  },
+  "innings": [
+    {
+      "team": "India",
+      "runs": 250,
+      "wickets": 8,
+      "overs": "50.0",
+      "extras": {"wides": 10, "noballs": 2, "byes": 5, "leg_byes": 3, "penalty": 0},
+      "batting": [
+        {"player": "Rohit Sharma", "runs": 90, "balls": 100, "fours": 8, "sixes": 2, "is_out": true, "dismissal_type": "CAUGHT", "bowler": "Mitchell Starc", "fielder": "David Warner"},
+        {"player": "Virat Kohli", "runs": 55, "balls": 70, "fours": 4, "sixes": 1, "is_out": false},
+        {"player": "Suryakumar Yadav", "runs": 30, "balls": 25, "fours": 3, "sixes": 1, "is_out": true, "dismissal_type": "BOWLED", "bowler": "Pat Cummins"},
+        {"player": "Hardik Pandya", "runs": 25, "balls": 20, "fours": 2, "sixes": 1, "is_out": true, "dismissal_type": "LBW", "bowler": "Josh Hazlewood"},
+        {"player": "KL Rahul", "runs": 18, "balls": 25, "fours": 1, "sixes": 0, "is_out": true, "dismissal_type": "CAUGHT", "bowler": "Adam Zampa", "fielder": "Steve Smith"},
+        {"player": "Ravindra Jadeja", "runs": 12, "balls": 15, "fours": 1, "sixes": 0, "is_out": false}
+      ],
+      "bowling": [
+        {"player": "Mitchell Starc", "overs": "10.0", "legal_balls": 60, "runs_conceded": 45, "wickets": 2, "maidens": 1},
+        {"player": "Pat Cummins", "overs": "10.0", "legal_balls": 60, "runs_conceded": 40, "wickets": 2, "maidens": 0},
+        {"player": "Josh Hazlewood", "overs": "10.0", "legal_balls": 60, "runs_conceded": 48, "wickets": 1, "maidens": 1},
+        {"player": "Adam Zampa", "overs": "9.0", "legal_balls": 54, "runs_conceded": 42, "wickets": 1, "maidens": 0},
+        {"player": "David Warner", "overs": "6.0", "legal_balls": 36, "runs_conceded": 30, "wickets": 1, "maidens": 0},
+        {"player": "Glenn Maxwell", "overs": "5.0", "legal_balls": 30, "runs_conceded": 35, "wickets": 1, "maidens": 0}
+      ]
+    },
+    {
+      "team": "Australia",
+      "runs": 251,
+      "wickets": 5,
+      "overs": "48.2",
+      "extras": {"wides": 12, "noballs": 1, "byes": 4, "leg_byes": 2, "penalty": 0},
+      "batting": [
+        {"player": "David Warner", "runs": 80, "balls": 70, "fours": 9, "sixes": 2, "is_out": true, "dismissal_type": "BOWLED", "bowler": "Jasprit Bumrah"},
+        {"player": "Steve Smith", "runs": 65, "balls": 80, "fours": 6, "sixes": 1, "is_out": false},
+        {"player": "Glenn Maxwell", "runs": 45, "balls": 30, "fours": 5, "sixes": 2, "is_out": true, "dismissal_type": "CAUGHT", "bowler": "Mohammed Shami", "fielder": "Virat Kohli"},
+        {"player": "Mitchell Marsh", "runs": 35, "balls": 45, "fours": 3, "sixes": 1, "is_out": true, "dismissal_type": "LBW", "bowler": "Ravindra Jadeja"},
+        {"player": "Alex Carey", "runs": 15, "balls": 20, "fours": 1, "sixes": 0, "is_out": false}
+      ],
+      "bowling": [
+        {"player": "Jasprit Bumrah", "overs": "9.0", "legal_balls": 54, "runs_conceded": 40, "wickets": 2, "maidens": 1},
+        {"player": "Mohammed Shami", "overs": "9.0", "legal_balls": 54, "runs_conceded": 45, "wickets": 1, "maidens": 0},
+        {"player": "Ravindra Jadeja", "overs": "10.0", "legal_balls": 60, "runs_conceded": 48, "wickets": 1, "maidens": 0},
+        {"player": "Kuldeep Yadav", "overs": "10.0", "legal_balls": 60, "runs_conceded": 50, "wickets": 1, "maidens": 0},
+        {"player": "Hardik Pandya", "overs": "7.0", "legal_balls": 42, "runs_conceded": 42, "wickets": 0, "maidens": 0}
+      ]
+    }
+  ]
+}

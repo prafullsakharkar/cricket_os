@@ -30,6 +30,22 @@ env = environ.Env(
     CELERY_TASK_ALWAYS_EAGER=(bool, False),
     THROTTLE_ANON=(str, "120/min"),
     THROTTLE_USER=(str, "600/min"),
+    # Phase D live-ingestion flags (roadmap discipline: everything behind a flag).
+    LIVE_INGESTION_ENABLED=(bool, False),
+    LIVE_PUSH_RECEIVER_ENABLED=(bool, False),
+    ENABLE_METRICS_ENDPOINT=(bool, False),
+    LIVE_PUSH_HMAC_SECRET=(str, ""),
+    LIVE_SHADOW_VERIFY_EVERY=(int, 10),
+    LIVE_POLL_INTERVAL_SECONDS=(int, 30),
+    LIVE_POLL_LOCK_TTL_SECONDS=(int, 300),
+    LIVE_FRESHNESS_STALE_SECONDS=(int, 60),
+    LIVE_EVENT_RETENTION_HOURS=(int, 24),
+    LIVE_RECONCILIATION_WINDOW_HOURS=(int, 24),
+    LIVE_BREAKER_FAILURE_THRESHOLD=(int, 5),
+    LIVE_BREAKER_RECOVERY_SECONDS=(int, 60),
+    LIVE_BREAKER_SUCCESS_THRESHOLD=(int, 2),
+    LIVE_PUSH_REPLAY_WINDOW_SECONDS=(int, 300),
+    DJANGO_ENVIRONMENT=(str, "dev"),
 )
 
 # Read a local .env when present. Never committed (see .gitignore).
@@ -41,6 +57,64 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default=DEV_INSECURE_SECRET_KEY)
 DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+# --------------------------------------------------------------------------- #
+# Phase D — live ingestion flags (LIVE_INGESTION.md documents each one).
+# Everything is off by default; a deploy opts in per provider and surface.
+# --------------------------------------------------------------------------- #
+LIVE_INGESTION_ENABLED = env("LIVE_INGESTION_ENABLED")
+LIVE_PUSH_RECEIVER_ENABLED = env("LIVE_PUSH_RECEIVER_ENABLED")
+# Internal Prometheus exposition endpoint (ops surface, never public; gated at
+# URL registration so a disabled deployment 404s the path entirely).
+ENABLE_METRICS_ENDPOINT = env("ENABLE_METRICS_ENDPOINT")
+# Shared secret for the push receiver's HMAC signatures. Empty = receiver 503s.
+LIVE_PUSH_HMAC_SECRET = env("LIVE_PUSH_HMAC_SECRET")
+# Shadow verification cadence: every N appended batches, and always at innings
+# end (see apps.live.services.apply / verify).
+LIVE_SHADOW_VERIFY_EVERY = env("LIVE_SHADOW_VERIFY_EVERY")
+# Polling cadence while a match is IN_PROGRESS; breaks/terminal are slower
+# (apps.live.services.polling.cadence_for).
+LIVE_POLL_INTERVAL_SECONDS = env("LIVE_POLL_INTERVAL_SECONDS")
+# Redis lock TTL for per-match poll de-duplication (correctness of writes comes
+# from the Postgres per-match advisory lock, not from this).
+LIVE_POLL_LOCK_TTL_SECONDS = env("LIVE_POLL_LOCK_TTL_SECONDS")
+# Freshness threshold: a live match older than this is served with
+# ``meta.stale=true`` (API_SPECIFICATION §3.1).
+LIVE_FRESHNESS_STALE_SECONDS = env("LIVE_FRESHNESS_STALE_SECONDS")
+# Post-completion event-log retention window (prune_events).
+LIVE_EVENT_RETENTION_HOURS = env("LIVE_EVENT_RETENTION_HOURS")
+# Post-completion reconciliation window (cache policy: immutable after this).
+LIVE_RECONCILIATION_WINDOW_HOURS = env("LIVE_RECONCILIATION_WINDOW_HOURS")
+# Per-provider-endpoint circuit breaker thresholds (breaker.py).
+LIVE_BREAKER_FAILURE_THRESHOLD = env("LIVE_BREAKER_FAILURE_THRESHOLD")
+LIVE_BREAKER_RECOVERY_SECONDS = env("LIVE_BREAKER_RECOVERY_SECONDS")
+LIVE_BREAKER_SUCCESS_THRESHOLD = env("LIVE_BREAKER_SUCCESS_THRESHOLD")
+# Push receiver: HMAC replay window (seconds).
+LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
+
+# Deployment environment name ("dev"/"test"/"prod"). The ReplayAdapter is
+# hard-gated to non-prod (see apps.providers.adapters.replay).
+ENVIRONMENT = env("DJANGO_ENVIRONMENT")
+
+# --------------------------------------------------------------------------- #
+# Licensing policy (SECURITY §11: configuration, not code)
+# --------------------------------------------------------------------------- #
+#: Per-provider content policy. A licence change is a config change, never a
+#: code change. ``replay`` is the internal fake provider; a licensed provider
+#: adds an entry here (post Phase-0 gate). Absent entries fall back to the
+#: default policy (display allowed, commentary/derived feeds not licensed).
+LICENSED_CONTENT_POLICIES = {
+    "replay": {
+        "display_rights": True,
+        "redistribution_rights": False,
+        "attribution_required": True,
+        "attribution": "Replay (internal test corpus)",
+        "commentary_allowed": False,
+        "derived_feeds_allowed": False,
+        "ball_data_retention_days": None,
+        "notes": "Internal fake provider; data is never redistributed.",
+    },
+}
 
 # The dedicated PostgreSQL schema every table lives in.
 DB_SCHEMA = "cricket"
@@ -72,6 +146,14 @@ LOCAL_APPS = [
     "apps.competitions",
     "apps.providers",
     "apps.administration",
+    "apps.matches",
+    "apps.innings",
+    "apps.deliveries",
+    "apps.scorecards",
+    "apps.statistics",
+    "apps.ingestion",
+    "apps.synchronization",
+    "apps.live",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -187,7 +269,8 @@ CELERY_TASK_ANNOTATIONS = {
         "retry_backoff": True,
         "retry_backoff_max": 600,
         "retry_jitter": True,
-        "max_retries": 5,
+        # Bounded attempts for transient failures (DATA_INGESTION §4.3).
+        "max_retries": 8,
     }
 }
 
@@ -204,6 +287,11 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.CursorPagination",
     "PAGE_SIZE": 25,
+    # DRF reserves `?format=` (URL_FORMAT_OVERRIDE) for renderer selection,
+    # but the public API documents `format` as a match filter (API_SPEC §3.1).
+    # Move the renderer override to a non-colliding query param; renderer
+    # choice stays on the Accept header in practice.
+    "URL_FORMAT_OVERRIDE": "renderer",
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_THROTTLE_CLASSES": [

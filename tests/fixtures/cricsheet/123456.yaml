@@ -1,0 +1,193 @@
+# Minimal but structurally complete Cricsheet match (T20I).
+# India bat first: 8/1 (Rohit caught on the last ball). Australia chase 9 in
+# one over (Maxwell retires hurt at the non-striker's end — a retirement, not
+# a wicket) and win by 10 wickets.
+meta:
+  data_version: "6.0"
+  created: "2023-11-01T00:00:00Z"
+  revision: 1
+info:
+  dates:
+  - "2023-10-25"
+  gender: male
+  match_type: T20I
+  overs: "20"
+  outcome:
+    winner: Australia
+    by:
+      wickets: 10
+  teams:
+  - India
+  - Australia
+  toss:
+    decision: bat
+    winner: India
+  venue: Narendra Modi Stadium
+  city: Ahmedabad
+  players:
+    India:
+    - "Rohit Sharma"
+    - "Virat Kohli"
+    - "Suryakumar Yadav"
+    - "Jasprit Bumrah"
+    Australia:
+    - "David Warner"
+    - "Steve Smith"
+    - "Glenn Maxwell"
+    - "Mitchell Starc"
+  registry:
+    people:
+      "Rohit Sharma":
+        key_opta: opt-rohit
+      "Virat Kohli":
+        key_opta: opt-kohli
+      "Suryakumar Yadav":
+        key_opta: opt-suryakumar
+      "Jasprit Bumrah":
+        key_opta: opt-bumrah
+      "David Warner":
+        key_opta: opt-warner
+      "Steve Smith":
+        key_opta: opt-smith
+      "Glenn Maxwell":
+        key_opta: opt-maxwell
+      "Mitchell Starc":
+        key_opta: opt-starc
+    teams:
+      India:
+        key_opta: opt-india
+      Australia:
+        key_opta: opt-australia
+innings:
+- team: India
+  deliveries:
+  - batter: "Rohit Sharma"
+    bowler: "Mitchell Starc"
+    non_striker: "Virat Kohli"
+    runs:
+      batter: 1
+      extras: 0
+      total: 1
+    wicket: false
+    over: 1
+    ball: 0
+  - batter: "Rohit Sharma"
+    bowler: "Mitchell Starc"
+    non_striker: "Virat Kohli"
+    runs:
+      batter: 4
+      extras: 0
+      total: 4
+    wicket: false
+    over: 1
+    ball: 1
+  - batter: "Rohit Sharma"
+    bowler: "Mitchell Starc"
+    non_striker: "Virat Kohli"
+    runs:
+      batter: 0
+      extras: 0
+      total: 0
+    wicket: false
+    over: 1
+    ball: 2
+  - batter: "Rohit Sharma"
+    bowler: "Mitchell Starc"
+    non_striker: "Virat Kohli"
+    runs:
+      batter: 0
+      extras: 1
+      total: 1
+    extras:
+      wides: 1
+    wicket: false
+    over: 1
+    ball: 3
+  - batter: "Rohit Sharma"
+    bowler: "Mitchell Starc"
+    non_striker: "Virat Kohli"
+    runs:
+      batter: 2
+      extras: 0
+      total: 2
+    wicket: false
+    over: 1
+    ball: 4
+  - batter: "Rohit Sharma"
+    bowler: "Mitchell Starc"
+    non_striker: "Virat Kohli"
+    runs:
+      batter: 0
+      extras: 0
+      total: 0
+    wicket:
+      kind: "caught"
+      player_out: "Rohit Sharma"
+      fielders:
+      - "Steve Smith"
+    over: 1
+    ball: 5
+- team: Australia
+  deliveries:
+  - batter: "David Warner"
+    bowler: "Jasprit Bumrah"
+    non_striker: "Glenn Maxwell"
+    runs:
+      batter: 4
+      extras: 0
+      total: 4
+    wicket: false
+    over: 1
+    ball: 0
+  - batter: "David Warner"
+    bowler: "Jasprit Bumrah"
+    non_striker: "Glenn Maxwell"
+    runs:
+      batter: 4
+      extras: 0
+      total: 4
+    wicket: false
+    over: 1
+    ball: 1
+  - batter: "David Warner"
+    bowler: "Jasprit Bumrah"
+    non_striker: "Glenn Maxwell"
+    runs:
+      batter: 1
+      extras: 0
+      total: 1
+    wicket: false
+    over: 1
+    ball: 2
+  - batter: "David Warner"
+    bowler: "Jasprit Bumrah"
+    non_striker: "Glenn Maxwell"
+    runs:
+      batter: 0
+      extras: 0
+      total: 0
+    wicket:
+      kind: "retired hurt"
+      player_out: "Glenn Maxwell"
+    over: 1
+    ball: 3
+  - batter: "David Warner"
+    bowler: "Jasprit Bumrah"
+    non_striker: "Steve Smith"
+    runs:
+      batter: 0
+      extras: 0
+      total: 0
+    wicket: false
+    over: 1
+    ball: 4
+  - batter: "David Warner"
+    bowler: "Jasprit Bumrah"
+    non_striker: "Steve Smith"
+    runs:
+      batter: 0
+      extras: 0
+      total: 0
+    wicket: false
+    over: 1
+    ball: 5
