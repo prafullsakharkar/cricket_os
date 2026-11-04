@@ -130,7 +130,9 @@ class _Fanout:
     async def _backfill(self) -> None:
         """Replay the missing run after a pub/sub gap (ledger #4)."""
         metrics.REALTIME_GAP_BACKFILLS.inc()
-        info = self.hub.reader.events_since(self.match_id, self.highest_seq)
+        info = await asyncio.to_thread(
+            self.hub.reader.events_since, self.match_id, self.highest_seq
+        )
         if info.resync_required:
             self.resync_notified = True
             metrics.REALTIME_RESYNCS.inc()
@@ -214,7 +216,9 @@ class Hub:
             allowed = None
             policy = self.policy
             if policy is not None:
-                allowed = policy.allowed_event_types(match_id)
+                # Policy resolution touches the ORM (licensing); run it off the
+                # event loop (Django forbids sync ORM calls from async code).
+                allowed = await asyncio.to_thread(policy.allowed_event_types, match_id)
             fanout = _Fanout(self, match_id, allowed=allowed)
             self._fanouts[match_id] = fanout
         sub = Subscription(match_id, queue_capacity=self.queue_capacity)
@@ -237,7 +241,9 @@ class Hub:
         metrics.REALTIME_CONNECTIONS.set(self.subscriber_count())
 
     async def _replay(self, sub: Subscription, match_id: str, last_seq: int) -> None:
-        info = self.reader.events_since(match_id, last_seq)
+        # The reader is sync ORM; Django forbids that from async code, so run
+        # the read off the event loop (replay is rare and single-row-indexed).
+        info = await asyncio.to_thread(self.reader.events_since, match_id, last_seq)
         if info.resync_required:
             metrics.REALTIME_RESYNCS.inc()
             await sub.put(

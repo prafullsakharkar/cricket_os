@@ -163,15 +163,18 @@ def _isolate_event_subscriptions() -> Iterator[None]:
     invalidation.resubscribe()
     invalidation.configure_purger(purger.NoopCachePurger())
     # Fresh rate-limit buckets per test (the in-process test backend must not
-    # accumulate across tests sharing a client IP), and a clean metric slate so
+    # accumulate across tests sharing a client IP), a clean connection-cap
+    # counter for the SSE/WS transport tests, and a clean metric slate so
     # counter assertions (throttling, realtime) start from zero.
     from apps.core import metrics
-    from apps.core.throttling import reset_limiter
+    from apps.core.throttling import reset_connection_limiter, reset_limiter
 
     reset_limiter()
+    reset_connection_limiter()
     metrics.reset()
     yield
     events.clear_subscriptions()
     invalidation.configure_purger(purger.NoopCachePurger())
     reset_limiter()
+    reset_connection_limiter()
     metrics.reset()

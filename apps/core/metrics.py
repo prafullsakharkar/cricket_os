@@ -251,6 +251,10 @@ REALTIME_DEGRADED = metric(
     "realtime_degraded", "Realtime broker in degraded polling mode (0/1)", kind="gauge"
 )
 REALTIME_DRAINS = metric("realtime_drains_total", "Graceful hub drains performed")
+REALTIME_CAP_DENIED = metric(
+    "realtime_cap_denied_total",
+    "Stream/WS connections rejected by the per-node connection caps",
+)
 # Throttling (API_SPEC §7).
 RATE_LIMIT_DENIED = metric(
     "rate_limit_denied_total", "Requests denied by the token-bucket limiter", labelnames=("scope",)
@@ -284,6 +288,7 @@ __all__ = [
     "PROVIDER_LAG_SECONDS",
     "RATE_LIMIT_DENIED",
     "RATE_LIMIT_FALLBACK",
+    "REALTIME_CAP_DENIED",
     "REALTIME_COALESCED",
     "REALTIME_CONNECTIONS",
     "REALTIME_DEGRADED",

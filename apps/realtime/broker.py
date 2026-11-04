@@ -191,7 +191,9 @@ class Broker:
         """Replay new log events for every match with subscribers."""
         for match_id in self._hub.active_match_ids():
             highest = self._hub.highest_seq(match_id)
-            info = self.reader.events_since(match_id, highest)
+            # The reader is sync ORM; Django forbids that from async code, so
+            # run the poll off the event loop (degraded mode only).
+            info = await asyncio.to_thread(self.reader.events_since, match_id, highest)
             for event in info.events:
                 await self._hub.publish(from_stream_event(event))
 

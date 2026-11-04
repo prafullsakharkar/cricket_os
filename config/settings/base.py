@@ -287,6 +287,20 @@ RATELIMIT_BACKEND = env("RATELIMIT_BACKEND", default="redis")
 # the key hook entirely (no key issuance/user accounts in scope).
 RATELIMIT_KEY_HEADER = env("RATELIMIT_KEY_HEADER", default="")
 
+# --- Realtime transports (SSE/WS, API_SPEC §3.8) ---------------------------
+# SSE heartbeat: a comment line every N seconds keeps proxies from closing an
+# idle one-way scoreboard stream.
+REALTIME_SSE_HEARTBEAT_SECONDS = env("REALTIME_SSE_HEARTBEAT_SECONDS", default=15)
+# Cross-origin streams are rejected unless the Origin matches the request host
+# or is listed here (comma-separated; browser clients always send Origin).
+REALTIME_ALLOWED_ORIGINS = env("REALTIME_ALLOWED_ORIGINS", default="")
+# Per-node connection caps (ConnectionLimiter is per process, fail-open): a
+# single IP cannot monopolize a node, a hot match cannot starve other matches,
+# and the node has a hard bound so memory stays bounded.
+REALTIME_CONNECTION_CAP_PER_IP = env("REALTIME_CONNECTION_CAP_PER_IP", default=8)
+REALTIME_CONNECTION_CAP_PER_MATCH = env("REALTIME_CONNECTION_CAP_PER_MATCH", default=2000)
+REALTIME_CONNECTION_CAP_PER_NODE = env("REALTIME_CONNECTION_CAP_PER_NODE", default=10000)
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",

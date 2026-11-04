@@ -275,6 +275,34 @@ def reset_limiter() -> None:
     _limiter = None
 
 
+_connection_limiter: ConnectionLimiter | None = None
+
+
+def get_connection_limiter() -> ConnectionLimiter:
+    """The process-wide connection cap counter (SSE/WS transports, per node).
+
+    One shared instance means a client's SSE and WebSocket connections (Group
+    8) draw against the same per-node budget; the counters are keyed by
+    transport prefix so per-transport caps stay independent.
+    """
+    global _connection_limiter
+    if _connection_limiter is None:
+        _connection_limiter = ConnectionLimiter()
+    return _connection_limiter
+
+
+def configure_connection_limiter(limiter: ConnectionLimiter | None) -> None:
+    """Swap the process connection limiter (tests inject fakes)."""
+    global _connection_limiter
+    _connection_limiter = limiter
+
+
+def reset_connection_limiter() -> None:
+    """Drop the process connection limiter (test isolation)."""
+    global _connection_limiter
+    _connection_limiter = None
+
+
 # --------------------------------------------------------------------------- #
 # DRF throttle
 # --------------------------------------------------------------------------- #
@@ -357,7 +385,10 @@ __all__ = [
     "RedisBucketStore",
     "TokenBucket",
     "TokenBucketThrottle",
+    "configure_connection_limiter",
     "configure_limiter",
+    "get_connection_limiter",
     "get_limiter",
+    "reset_connection_limiter",
     "reset_limiter",
 ]

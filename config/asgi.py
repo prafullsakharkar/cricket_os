@@ -35,8 +35,12 @@ def build_realtime_components() -> tuple[object, object, object]:
     from apps.realtime.broker import Broker
     from apps.realtime.hub import Hub
 
-    wiring.configure(reader=PostgresEventLogReader(), policy=LicensingMatchPolicy())
     hub = Hub()
+    wiring.configure(
+        reader=PostgresEventLogReader(),
+        policy=LicensingMatchPolicy(),
+        hub=hub,
+    )
     broker = Broker(hub)
     return hub, broker, wiring
 
