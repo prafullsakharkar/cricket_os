@@ -309,8 +309,7 @@ class TestCompletedMatch:
     def test_completed_match_cache_policy_and_etag_304(self) -> None:
         response = self.client.get(self.match_url)  # type: ignore[attr-defined]
         assert response["Cache-Control"] == (
-            "public, max-age=300, s-maxage=3600, stale-while-revalidate=600, "
-            "stale-if-error=86400"
+            "public, max-age=300, s-maxage=3600, stale-while-revalidate=600, stale-if-error=86400"
         )
         etag = response["ETag"]
         assert etag.startswith('"') and etag.endswith('"')

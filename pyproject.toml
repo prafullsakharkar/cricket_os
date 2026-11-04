@@ -120,6 +120,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 "scripts/**" = ["T201"]
 # The standalone reference client is a CLI tool that prints by design.
 "tools/**" = ["T201"]
+# The load smoke gate is a CLI report tool that prints by design.
+"loadtests/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]

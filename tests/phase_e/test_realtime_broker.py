@@ -221,9 +221,7 @@ def test_run_degrades_when_subscribe_fails() -> None:
 def test_run_degraded_mode_polls_then_recovers() -> None:
     async def scenario() -> None:
         reader = FakeReader()
-        reader.log["m-1"] = {
-            1: {"event_type": "delivery.appended", "payload": {"delivery_seq": 1}}
-        }
+        reader.log["m-1"] = {1: {"event_type": "delivery.appended", "payload": {"delivery_seq": 1}}}
         hub = Hub(reader=reader)
         sub = await hub.subscribe("m-1")
 
@@ -271,15 +269,15 @@ def test_redis_transport_with_fake_client() -> None:
 
     class _FakePubSub:
         def __init__(self) -> None:
-            self.messages: list[dict[str, object]] = [
-                {"type": "pmessage", "data": _raw("m-1", 1)}
-            ]
+            self.messages: list[dict[str, object]] = [{"type": "pmessage", "data": _raw("m-1", 1)}]
             self.closed = False
 
         def psubscribe(self, pattern: str) -> None:
             self.pattern = pattern
 
-        def get_message(self, ignore_subscribe_messages: bool = True, timeout: float | None = 0.0) -> object:
+        def get_message(
+            self, ignore_subscribe_messages: bool = True, timeout: float | None = 0.0
+        ) -> object:
             return self.messages.pop(0) if self.messages else None
 
         def close(self) -> None:

@@ -99,9 +99,7 @@ def consistent_snapshot() -> Iterator[None]:
 
 def current_event_seq(match_id: Any) -> int:
     """The highest event-log ``seq`` reflected by a snapshot of ``match_id``."""
-    return (
-        MatchEventLog.objects.filter(match_id=match_id).aggregate(last=Max("seq"))["last"] or 0
-    )
+    return MatchEventLog.objects.filter(match_id=match_id).aggregate(last=Max("seq"))["last"] or 0
 
 
 def _match_date(match: Match) -> datetime.date:
