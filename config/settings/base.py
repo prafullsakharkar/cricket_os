@@ -266,6 +266,13 @@ REDIS_MAX_CONNECTIONS = env.int("REDIS_MAX_CONNECTIONS", default=100)
 # Header carrying a response's surrogate keys (CDN purge tags). Configurable
 # because CDN providers allow renaming it; see docs/REALTIME_AND_CACHING.md.
 CACHE_SURROGATE_HEADER = env("CACHE_SURROGATE_HEADER", default="Surrogate-Key")
+# Number of trusted proxies between the internet and the origin (SECURITY §2
+# trust model). The rightmost that many ``X-Forwarded-For`` entries are trusted
+# as added by our edge; 0 = ignore the header entirely.
+TRUSTED_PROXY_HOPS = env.int("TRUSTED_PROXY_HOPS", default=0)
+# CDN purge endpoint (``PURGE`` by surrogate key). Empty = no CDN: origin
+# invalidation is handled by the version-bump registry and this hook is a no-op.
+CACHE_PURGE_URL = env("CACHE_PURGE_URL", default="")
 
 CACHES = {
     "default": {

@@ -38,6 +38,28 @@ class LocalCachePurger:
         metrics.CACHE_PURGES.inc(len(materialized))
 
 
+class NoopCachePurger:
+    """Accept and ignore purge requests (the default when no CDN is present).
+
+    Origin invalidation is handled by the version-bump registry; this is the
+    inert CDN hook so completion/correction events have no side effects beyond
+    the local registry.
+    """
+
+    def purge(self, keys: Iterable[str]) -> None:
+        return
+
+
+class RecordingCachePurger:
+    """Test double: record every purge call (deduplicated per call)."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def purge(self, keys: Iterable[str]) -> None:
+        self.calls.append(list(dict.fromkeys(keys)))
+
+
 def _urllib_transport(method: str, url: str, *, headers: dict[str, str], timeout: float) -> Any:
     request = urllib.request.Request(url, method=method, headers=headers)
     return urllib.request.urlopen(request, timeout=timeout)
@@ -85,6 +107,8 @@ __all__ = [
     "CachePurger",
     "HttpCachePurger",
     "LocalCachePurger",
+    "NoopCachePurger",
+    "RecordingCachePurger",
     "Transport",
     "for_settings",
 ]

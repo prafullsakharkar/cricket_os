@@ -156,9 +156,12 @@ def _isolate_event_subscriptions() -> Iterator[None]:
     events.subscribe(events.TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
     events.subscribe(events.TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
     # Phase E: cache invalidation subscribers live in core and are cleared by
-    # ``clear_subscriptions`` above, so re-attach them for every test.
-    from apps.core.cache import invalidation
+    # ``clear_subscriptions`` above, so re-attach them for every test, and
+    # reset the CDN purge hook (tests configure their own fake when needed).
+    from apps.core.cache import invalidation, purger
 
     invalidation.resubscribe()
+    invalidation.configure_purger(purger.NoopCachePurger())
     yield
     events.clear_subscriptions()
+    invalidation.configure_purger(purger.NoopCachePurger())
