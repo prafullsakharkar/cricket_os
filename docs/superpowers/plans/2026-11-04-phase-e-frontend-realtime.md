@@ -99,7 +99,7 @@ Ledger updated per commit; each group is independently reviewable.
 | 8 WebSocket transport | done | `650a22c` |
 | 9 Reference client + FRONTEND_CONTRACT | done | `f37e9d5` |
 | 10 Observability/runbooks/alerts | done | `a8eb27a` |
-| 11 Load tests | — | — |
+| 11 Load tests | done | `5a29d3e` |
 | 12 Docs/roadmap | — | — |
 
 ## Notes / risks
@@ -139,3 +139,10 @@ Ledger updated per commit; each group is independently reviewable.
 - Group 10 measured: affected sweep 843 passed; alert contract test iterates
   `ops/alerts/*.yml` (16 rules across both files) with exact rule-set
   assertions per file; runbooks cover all realtime/cache alerts.
+- Group 11 measured: `make test-loadtest-smoke` PASS locally — cached-read
+  warm p95 ≈ 0.6 ms (budget 200 ms), fan-out burst ≈ 0.21 s (budget 1 s;
+  dominated by the 0.2 s coalesce flush), immediate-correction ≈ 0.4 ms.
+  Full-repo `ruff check .`/`format --check .` needed a drive-by formatting fix
+  on three pre-existing files (reads.py, test_read_api.py,
+  test_realtime_broker.py) — pure formatting, no semantic diff; required for
+  acceptance #1 (`make check` green).
