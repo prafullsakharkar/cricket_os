@@ -304,13 +304,13 @@ def test_spoofed_forwarded_for_cannot_bypass_the_ip_cap() -> None:
 
 
 def test_parse_seq_ignores_malformed_and_negative_positions() -> None:
-    from apps.realtime.sse import _parse_seq
+    from apps.realtime.security import parse_seq
 
-    assert _parse_seq(None) is None
-    assert _parse_seq("") is None
-    assert _parse_seq("abc") is None
-    assert _parse_seq("-1") is None
-    assert _parse_seq("12") == 12
+    assert parse_seq(None) is None
+    assert parse_seq("") is None
+    assert parse_seq("abc") is None
+    assert parse_seq("-1") is None
+    assert parse_seq("12") == 12
 
 
 def test_heartbeat_class_override_wins_over_settings() -> None:

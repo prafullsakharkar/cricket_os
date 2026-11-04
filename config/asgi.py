@@ -20,6 +20,8 @@ django_asgi_app = get_asgi_application()
 
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
+from apps.realtime.routing import websocket_urlpatterns  # noqa: E402
+
 
 def build_realtime_components() -> tuple[object, object, object]:
     """Construct (hub, broker, wiring) with the injected matches implementations.
@@ -48,9 +50,7 @@ def build_realtime_components() -> tuple[object, object, object]:
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        # Phase D/E: replace the empty router with real consumer patterns, e.g.
-        #   from apps.realtime.routing import websocket_urlpatterns
-        #   "websocket": URLRouter(websocket_urlpatterns),
-        "websocket": URLRouter([]),
+        # Group 8: the realtime WebSocket consumer (SSE rides plain HTTP).
+        "websocket": URLRouter(websocket_urlpatterns),
     }
 )
