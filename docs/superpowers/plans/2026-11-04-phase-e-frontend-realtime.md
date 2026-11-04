@@ -85,6 +85,23 @@ Ledger updated per commit; each group is independently reviewable.
 | 10 | p95 cached live ≤ 200 ms; fan-out ≤ 1 s | `make test-loadtest-smoke` output |
 | 11 | Docs/runbooks/alerts/contract/roadmap | file diff |
 
+## Progress
+
+| Group | Status | Commit |
+|---|---|---|
+| 1 Redis roles + factory | done | `cf8407d` |
+| 2 Cache layer + invalidation publishers | done | `2f9c24d` |
+| 3 Cache integration + `meta.event_seq` | done | `9670839` |
+| 4 HTTP/CDN polish | done | `35f126c` |
+| 5 Throttling (fail-open) | done | `e8c7419` |
+| 6 Realtime core (hub/broker/frames) | done | `dd2ed60` |
+| 7 SSE transport | done | `ae1e345` |
+| 8 WebSocket transport | — | — |
+| 9 Reference client + FRONTEND_CONTRACT | — | — |
+| 10 Observability/runbooks/alerts | — | — |
+| 11 Load tests | — | — |
+| 12 Docs/roadmap | — | — |
+
 ## Notes / risks
 
 - `prometheus_client` absent: metrics facade fallback; alert YAML validated by
@@ -95,3 +112,12 @@ Ledger updated per commit; each group is independently reviewable.
   in-process smoke gate runs in CI.
 - Coverage gates: add `apps/realtime` to the main coverage source and keep
   ≥90%; hub gap/backfill + coalescing + invalidation registry ≥95% branch.
+- Group 6 measured: `apps/realtime` total 96% (≥90%), `hub.py` 100% branch,
+  `core.cache.invalidation` 100% branch; affected sweep 789 passed.
+- Group 7 measured: `apps/realtime` total 96% (≥90%), `sse.py` 100% line +
+  branch, `hub.py` 100% branch; affected sweep 809 passed.
+- Group 7 fix: hub/broker called the sync ORM reader + licensing policy
+  directly from async → `SynchronousOnlyOperation` under ASGI (first exercised
+  by snapshot→subscribe / ASGI e2e tests). All reader/policy calls bridge via
+  `asyncio.to_thread` (hub subscribe, `_replay`, `_backfill`, broker
+  `poll_once`). Tests that append rows inside a coroutine must do the same.
