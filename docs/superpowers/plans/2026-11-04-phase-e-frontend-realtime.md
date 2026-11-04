@@ -96,9 +96,9 @@ Ledger updated per commit; each group is independently reviewable.
 | 5 Throttling (fail-open) | done | `e8c7419` |
 | 6 Realtime core (hub/broker/frames) | done | `dd2ed60` |
 | 7 SSE transport | done | `ae1e345` |
-| 8 WebSocket transport | — | — |
-| 9 Reference client + FRONTEND_CONTRACT | — | — |
-| 10 Observability/runbooks/alerts | — | — |
+| 8 WebSocket transport | done | `650a22c` |
+| 9 Reference client + FRONTEND_CONTRACT | done | `f37e9d5` |
+| 10 Observability/runbooks/alerts | done | `a8eb27a` |
 | 11 Load tests | — | — |
 | 12 Docs/roadmap | — | — |
 
@@ -121,3 +121,21 @@ Ledger updated per commit; each group is independently reviewable.
   by snapshot→subscribe / ASGI e2e tests). All reader/policy calls bridge via
   `asyncio.to_thread` (hub subscribe, `_replay`, `_backfill`, broker
   `poll_once`). Tests that append rows inside a coroutine must do the same.
+- Group 8 measured: `apps/realtime` total 96% (≥90%), `consumers.py` 95%,
+  `security.py` + `sse.py` 100%, `hub.py` 100% branch; affected sweep 831
+  passed. Shared Origin/caps/resume policy extracted to
+  `apps/realtime/security.py` so SSE and WS are byte-identical. WS close
+  codes: 4403 origin, 4429 caps, 4400 bad message, 4409 too large, 1001
+  drain, 1011 server error.
+- Channels quirk: when the app itself closes a WS connection, Channels does
+  not synthesize a `websocket.disconnect` event — the consumer's
+  app-initiated close paths must stop the pump and release caps themselves.
+  Channels' `URLRouter` strips the leading slash like Django's URL resolver.
+- Group 9 measured: affected sweep 843 passed. **Critical wiring fix** — the
+  composition root was never invoked, so a real ASGI worker would fail every
+  SSE/WS connect and the broker would never run; `config/asgi.py` now handles
+  `lifespan.startup`/`shutdown` (build components, run/stop the broker).
+  `asyncio.suppress` does not exist in Python — `contextlib.suppress` only.
+- Group 10 measured: affected sweep 843 passed; alert contract test iterates
+  `ops/alerts/*.yml` (16 rules across both files) with exact rule-set
+  assertions per file; runbooks cover all realtime/cache alerts.
