@@ -100,7 +100,7 @@ Ledger updated per commit; each group is independently reviewable.
 | 9 Reference client + FRONTEND_CONTRACT | done | `f37e9d5` |
 | 10 Observability/runbooks/alerts | done | `a8eb27a` |
 | 11 Load tests | done | `5a29d3e` |
-| 12 Docs/roadmap | — | — |
+| 12 Docs/roadmap | done | `154ee9a` |
 
 ## Notes / risks
 
@@ -146,3 +146,8 @@ Ledger updated per commit; each group is independently reviewable.
   on three pre-existing files (reads.py, test_read_api.py,
   test_realtime_broker.py) — pure formatting, no semantic diff; required for
   acceptance #1 (`make check` green).
+- Group 12 measured: `make check` green (lint/typecheck/imports/tests/scoring/
+  identity/phasec) and `make test-loadtest-smoke` PASS. New
+  `docs/REALTIME_AND_CACHING.md`; API/PERFORMANCE/ARCHITECTURE/SECURITY/
+  TESTING/INGESTION updated; roadmap Phase E marked implemented with the
+  decisions/deferrals; docs link-check clean.
