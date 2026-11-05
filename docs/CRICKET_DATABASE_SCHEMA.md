@@ -1001,7 +1001,18 @@ CREATE TABLE cricket.player_career_stat (
   economy       numeric(8,2),
   bowling_sr    numeric(8,2),
   revision      integer NOT NULL DEFAULT 1,
-  computed_at   timestamptz NOT NULL DEFAULT now()
+  computed_at   timestamptz NOT NULL DEFAULT now(),
+  -- Phase F additions (brief requirement; recorded in the Phase F decisions):
+  -- watermark/labelling columns — rule_version + inputs_digest (rebuild
+  -- determinism), source_kind (computed vs provider) and coverage.
+  rule_version   text NOT NULL,
+  inputs_digest  text NOT NULL,
+  source_kind    text NOT NULL DEFAULT 'computed',
+  matches_counted integer NOT NULL DEFAULT 0,
+  partial_matches integer NOT NULL DEFAULT 0,
+  first_match_date date,
+  last_match_date  date,
+  is_partial     boolean NOT NULL DEFAULT false
 );
 CREATE UNIQUE INDEX ux_career_scope ON cricket.player_career_stat
   (player_id, scope_type, coalesce(scope_ref_id,'00000000-0000-0000-0000-000000000000'::uuid),
@@ -1024,7 +1035,15 @@ CREATE TABLE cricket.team_stat (
   wickets_taken integer NOT NULL DEFAULT 0,
   nrr          numeric(8,3),
   revision     integer NOT NULL DEFAULT 1,
-  computed_at  timestamptz NOT NULL DEFAULT now()
+  computed_at  timestamptz NOT NULL DEFAULT now(),
+  rule_version   text NOT NULL,
+  inputs_digest  text NOT NULL,
+  source_kind    text NOT NULL DEFAULT 'computed',
+  matches_counted integer NOT NULL DEFAULT 0,
+  partial_matches integer NOT NULL DEFAULT 0,
+  first_match_date date,
+  last_match_date  date,
+  is_partial     boolean NOT NULL DEFAULT false
 );
 CREATE UNIQUE INDEX ux_team_stat_scope ON cricket.team_stat
   (team_id, scope_type, coalesce(scope_ref_id,'00000000-0000-0000-0000-000000000000'::uuid),
@@ -1043,6 +1062,14 @@ CREATE TABLE cricket.head_to_head (
   no_results integer NOT NULL DEFAULT 0,
   last_match_id uuid REFERENCES cricket.match(id),
   computed_at timestamptz NOT NULL DEFAULT now(),
+  rule_version   text NOT NULL,
+  inputs_digest  text NOT NULL,
+  source_kind    text NOT NULL DEFAULT 'computed',
+  matches_counted integer NOT NULL DEFAULT 0,
+  partial_matches integer NOT NULL DEFAULT 0,
+  first_match_date date,
+  last_match_date  date,
+  is_partial     boolean NOT NULL DEFAULT false,
   CONSTRAINT ck_h2h_order CHECK (team_low_id < team_high_id)
 );
 CREATE UNIQUE INDEX ux_h2h ON cricket.head_to_head
@@ -1079,7 +1106,15 @@ CREATE TABLE cricket.leaderboard (
   team_id      uuid REFERENCES cricket.team(id),
   value        numeric(12,3),
   supporting   jsonb,
-  computed_at  timestamptz NOT NULL DEFAULT now()
+  computed_at  timestamptz NOT NULL DEFAULT now(),
+  rule_version   text NOT NULL,
+  inputs_digest  text NOT NULL,
+  source_kind    text NOT NULL DEFAULT 'computed',
+  matches_counted integer NOT NULL DEFAULT 0,
+  partial_matches integer NOT NULL DEFAULT 0,
+  first_match_date date,
+  last_match_date  date,
+  is_partial     boolean NOT NULL DEFAULT false
 );
 CREATE UNIQUE INDEX ux_leaderboard ON cricket.leaderboard
   (scope_type, coalesce(scope_ref_id,'00000000-0000-0000-0000-000000000000'::uuid),
@@ -1093,7 +1128,15 @@ CREATE TABLE cricket.form_trend (
   metric      text NOT NULL,
   value       numeric(12,3),
   series      jsonb,
-  computed_at timestamptz NOT NULL DEFAULT now()
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  rule_version   text NOT NULL,
+  inputs_digest  text NOT NULL,
+  source_kind    text NOT NULL DEFAULT 'computed',
+  matches_counted integer NOT NULL DEFAULT 0,
+  partial_matches integer NOT NULL DEFAULT 0,
+  first_match_date date,
+  last_match_date  date,
+  is_partial     boolean NOT NULL DEFAULT false
 );
 CREATE UNIQUE INDEX ux_form_trend ON cricket.form_trend
   (player_id, coalesce(format_type,'OTHER'), window_size, metric);
@@ -1117,10 +1160,33 @@ CREATE TABLE cricket.tournament_standings (
   qualify_status text,
   no_of_qual    integer,
   revision      integer NOT NULL DEFAULT 1,
-  computed_at   timestamptz NOT NULL DEFAULT now()
+  computed_at   timestamptz NOT NULL DEFAULT now(),
+  rule_version   text NOT NULL,
+  inputs_digest  text NOT NULL,
+  source_kind    text NOT NULL DEFAULT 'computed',
+  matches_counted integer NOT NULL DEFAULT 0,
+  partial_matches integer NOT NULL DEFAULT 0,
+  first_match_date date,
+  last_match_date  date,
+  is_partial     boolean NOT NULL DEFAULT false
 );
 CREATE UNIQUE INDEX ux_standings ON cricket.tournament_standings
   (series_id, coalesce(stage_id,'00000000-0000-0000-0000-000000000000'::uuid), team_id);
+
+-- Phase F helper: per-match recompute watermark (ledger decision 10). Records
+-- the source digest each terminal match's aggregates were computed from and the
+-- set of aggregate keys it contributed to, so corrections recompute the union
+-- of the previous and current dependency sets, and the scheduled sweep finds
+-- matches whose aggregates are behind.
+CREATE TABLE cricket.statistics_watermark (
+  id            uuid PRIMARY KEY,
+  match_id      uuid NOT NULL REFERENCES cricket.match(id),
+  source_digest text NOT NULL,
+  aggregate_keys jsonb NOT NULL DEFAULT '[]'::jsonb,
+  status        text NOT NULL DEFAULT 'done',
+  recomputed_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ux_watermark UNIQUE (match_id)
+);
 ```
 
 ### 3.8 Fantasy, provider & operations tables (DDL)

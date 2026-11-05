@@ -119,7 +119,7 @@ behaviour, ARCHITECTURE wins on module boundaries.
 
 | Group | Status | Commit |
 |---|---|---|
-| 1 Models + migrations | — | — |
+| 1 Models + migrations | done | (next) |
 | 2 Recompute pipeline + sweep | — | — |
 | 3 Standings + NRR | — | — |
 | 4 Leaderboards/records/H2H/form/compare | — | — |

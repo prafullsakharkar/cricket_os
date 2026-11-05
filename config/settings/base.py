@@ -159,6 +159,7 @@ LOCAL_APPS = [
     "apps.deliveries",
     "apps.scorecards",
     "apps.statistics",
+    "apps.rankings",
     "apps.ingestion",
     "apps.synchronization",
     "apps.live",

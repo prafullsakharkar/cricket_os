@@ -20,6 +20,10 @@ col|team|gender|character(1)|NOT NULL|plain
 col|team|gender|character varying(1)|NOT NULL|plain
 col|match|gender|character(1)|NOT NULL|plain
 col|match|gender|character varying(1)|NOT NULL|plain
+col|player_career_stat|gender|character(1)|NOT NULL|plain
+col|player_career_stat|gender|character varying(1)|NOT NULL|plain
+col|player_ranking|gender|character(1)|NOT NULL|plain
+col|player_ranking|gender|character varying(1)|NOT NULL|plain
 #
 # Category 2 — trigram opclass schema qualification. The reference DDL writes
 # `gin_trgm_ops`; Django emits `cricket.gin_trgm_ops` because the extension
@@ -37,3 +41,21 @@ idx|team|CREATE INDEX ON cricket.team USING gin (name cricket.gin_trgm_ops)
 # db_index at the SQL level); the indexes are harmless query-planning aids.
 idx|format_catalogue|CREATE INDEX ON cricket.format_catalogue USING btree (format text_pattern_ops)
 idx|import_job|CREATE INDEX ON cricket.import_job USING btree (idempotency_key text_pattern_ops)
+#
+# Category 4 — Phase F expression uniques. The reference DDL declares
+# `format_type cricket.format_type` (enum), so PostgreSQL renders the
+# `coalesce(format_type,'OTHER')` index expression with the literal cast
+# `'OTHER'::cricket.format_type`; Django stores the same column as `text`, so
+# the identical expression renders `'OTHER'::text`. The manifest normalizes
+# enum *columns* to text but pg_get_indexdef does not normalize the cast inside
+# an index expression, so the two renderings are accepted as equivalent.
+idx|form_trend|CREATE UNIQUE INDEX ON cricket.form_trend USING btree (player_id, COALESCE(format_type, 'OTHER'::cricket.format_type), window_size, metric)
+idx|form_trend|CREATE UNIQUE INDEX ON cricket.form_trend USING btree (player_id, COALESCE(format_type, 'OTHER'::text), window_size, metric)
+idx|head_to_head|CREATE UNIQUE INDEX ON cricket.head_to_head USING btree (team_low_id, team_high_id, COALESCE(format_type, 'OTHER'::cricket.format_type))
+idx|head_to_head|CREATE UNIQUE INDEX ON cricket.head_to_head USING btree (team_low_id, team_high_id, COALESCE(format_type, 'OTHER'::text))
+idx|leaderboard|CREATE UNIQUE INDEX ON cricket.leaderboard USING btree (scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), metric, COALESCE(format_type, 'OTHER'::cricket.format_type), rank)
+idx|leaderboard|CREATE UNIQUE INDEX ON cricket.leaderboard USING btree (scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), metric, COALESCE(format_type, 'OTHER'::text), rank)
+idx|player_career_stat|CREATE UNIQUE INDEX ON cricket.player_career_stat USING btree (player_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::cricket.format_type), gender)
+idx|player_career_stat|CREATE UNIQUE INDEX ON cricket.player_career_stat USING btree (player_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::text), gender)
+idx|team_stat|CREATE UNIQUE INDEX ON cricket.team_stat USING btree (team_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::cricket.format_type))
+idx|team_stat|CREATE UNIQUE INDEX ON cricket.team_stat USING btree (team_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::text))
