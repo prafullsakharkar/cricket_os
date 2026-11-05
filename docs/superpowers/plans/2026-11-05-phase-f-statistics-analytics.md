@@ -66,11 +66,16 @@ behaviour, ARCHITECTURE wins on module boundaries.
    engine's `Classified` mechanism at render time; API `meta` carries
    `official_source` + `as_of` + `coverage` + attribution.
 9. **Merge + aggregate rows.** `apps/players/services/merge.py` re-points
-   registered FKs inside the merge transaction. **Resolution:** register the
-   Phase F `Player` FKs (player_career_stat, form_trend, player_ranking) with
-   the merge registry; the `player.merged` subscriber dedupes (collapsed
-   duplicates on the unique key), deletes orphan rows for the loser, and
+   registered FKs inside the merge transaction. **Resolution (refined at
+   implementation):** registering the Phase F *aggregate* FKs (player_career_stat,
+   form_trend, player_ranking) for re-pointing would violate their expression
+   uniques on any real merge (both identities have career rows — the same
+   failure `test_failed_reference_repaint_rolls_back` proves for squads).
+   Instead: register the **source** table (`player_match_stat.player`) so the
+   loser's per-match lines follow the winner; the `player.merged` subscriber
+   deletes the loser's aggregate rows (career/form/leaderboard/ranking) and
    recomputes the winner's scopes from source (digest-identical on rebuild).
+   Recorded as a conflict in the final report.
 10. **Dependency-set changes on correction.** To make "include the previous set
     if the result or participants changed" testable and correct, each match gets
     a watermark row (`statistics_watermark`) recording `source_digest` and the
@@ -119,8 +124,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 
 | Group | Status | Commit |
 |---|---|---|
-| 1 Models + migrations | done | (next) |
-| 2 Recompute pipeline + sweep | — | — |
+| 1 Models + migrations | done | 5075536 |
+| 2 Recompute pipeline + sweep | done | (next) |
 | 3 Standings + NRR | — | — |
 | 4 Leaderboards/records/H2H/form/compare | — | — |
 | 5 Rankings | — | — |
@@ -142,3 +147,15 @@ behaviour, ARCHITECTURE wins on module boundaries.
 - Latency: report p95 (uncached) for leaderboard, points-table, player-stats,
   search; backfill time for ~1,000 matches with extrapolation note.
 - `docs/PROVIDER_DECISION.md` absent → fixture-backed rankings adapter only.
+- **Group 2 rulings (implementation):**
+  - Merge refinement (decision 9, cost if wrong: a re-pointed `player_match_stat`
+    with both identities in one match would violate `ux_player_match_stat`): the
+    generic merge registry is NOT used for `player_match_stat`; the
+    `player.merged` subscriber re-points source rows itself, merging same-match
+    rows' lines before recomputing the winner.
+  - Two-key advisory locks are `(int, int)` in PostgreSQL (no int8 overload);
+    `_lock_pair` folds SHA-256 halves to signed 32-bit and casts `::int`.
+  - `stats.updated`/`standings.updated` publish on-commit, so the publish test
+    uses `django_db(transaction=True)` (the `test_events.py` precedent).
+  - CAREER-scope digests are global: recompute reflects every source row present
+    at recompute time (add-then-remove test sequences around that).

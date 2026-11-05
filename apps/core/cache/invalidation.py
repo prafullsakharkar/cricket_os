@@ -106,6 +106,23 @@ def _competition(payload: Mapping[str, Any]) -> set[str]:
     return namespaces
 
 
+def _stats_updated(payload: Mapping[str, Any]) -> set[str]:
+    """Aggregate statistics changed: bump the player's namespace + the whole set."""
+    namespaces = {"statistics"}
+    value = payload.get("player_id")
+    if value:
+        namespaces.add(f"statistics:player:{value}")
+    return namespaces
+
+
+def _standings_updated(payload: Mapping[str, Any]) -> set[str]:
+    namespaces = {"standings"}
+    value = payload.get("series_id")
+    if value:
+        namespaces.add(f"standings:{value}")
+    return namespaces
+
+
 _DEFAULTS: dict[str, Invalidator] = {
     events.TOPIC_DELIVERY_APPENDED: _match_live,
     events.TOPIC_DELIVERY_CORRECTED: _match_live,
@@ -122,6 +139,8 @@ _DEFAULTS: dict[str, Invalidator] = {
     events.TOPIC_VENUE_UPDATED: _reference("venue"),
     events.TOPIC_SERIES_UPDATED: _series,
     events.TOPIC_COMPETITION_UPDATED: _competition,
+    events.TOPIC_STATS_UPDATED: _stats_updated,
+    events.TOPIC_STANDINGS_UPDATED: _standings_updated,
 }
 
 
