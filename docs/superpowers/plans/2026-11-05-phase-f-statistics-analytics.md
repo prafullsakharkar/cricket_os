@@ -125,8 +125,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | Group | Status | Commit |
 |---|---|---|
 | 1 Models + migrations | done | 5075536 |
-| 2 Recompute pipeline + sweep | done | (next) |
-| 3 Standings + NRR | — | — |
+| 2 Recompute pipeline + sweep | done | 700baa6 |
+| 3 Standings + NRR | done | — |
 | 4 Leaderboards/records/H2H/form/compare | — | — |
 | 5 Rankings | — | — |
 | 6 Search | — | — |
@@ -159,3 +159,19 @@ behaviour, ARCHITECTURE wins on module boundaries.
     uses `django_db(transaction=True)` (the `test_events.py` precedent).
   - CAREER-scope digests are global: recompute reflects every source row present
     at recompute time (add-then-remove test sequences around that).
+- **Group 3 rulings (implementation):**
+  - `points_system` overrides only the five points fields via
+    `dataclasses.replace` on the format's frozen `RuleConfig`; the effective
+    points config is folded into the standings inputs digest, so a
+    `points_system` edit re-triggers recompute.
+  - Form string: per-team result chars in match order, `_form_string` takes the
+    last 5 and reverses → most-recent-first `W/L/T/D/N` (window 5).
+  - `qualify_status`/`no_of_qual` are steward-set passthroughs: preserved on
+    every recompute; only fresh rows get `no_of_qual` from `points_system`.
+  - Reconciliation scope key `standings:{series}:{stage|'-'}`; the hook
+    recomputes fresh then diffs (NRR rounded to 3 dp on both sides); public
+    `report_mismatch` alias added to the synchronization service so statistics
+    never imports ingestion (dependency inversion preserved).
+  - Group 1 follow-up surfaced by the full suite: the Phase F aggregate +
+    `rankings` models' permissions were missing from the admin "every
+    permission" group → `administration/0005_phase_f_model_permissions`.

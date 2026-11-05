@@ -84,6 +84,17 @@ def _error_for(job: ReconciliationJob, *, provider: Any = None) -> None:
     _report_mismatch(job, provider=provider)
 
 
+def report_mismatch(job: ReconciliationJob, *, provider: Any = None) -> None:
+    """Public alias for :func:`_error_for` (used by cross-app reconcilers).
+
+    ``apps.statistics``' standings reconciliation opens a job and calls this
+    directly; the reporter (and thus the DLQ ``IngestionError`` row) is wired
+    by ``apps.ingestion``'s ``register_default_reporters``, so the statistics
+    module never imports ingestion.
+    """
+    _report_mismatch(job, provider=provider)
+
+
 def _stored_delivery_seqs(innings_id: Any) -> frozenset[int]:
     from apps.deliveries.models import Delivery
 
@@ -348,5 +359,6 @@ __all__ = [
     "reconcile_fixtures",
     "reconcile_state",
     "register_mismatch_reporter",
+    "report_mismatch",
     "resolve_job",
 ]

@@ -35,11 +35,12 @@ reserved.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from django.db import connection, transaction
@@ -567,12 +568,51 @@ def _recompute_h2h_key(parts: list[str]) -> None:
     HeadToHead.objects.update_or_create(**lookup, defaults=defaults)
 
 
+def _config_for_series(config: RuleConfig, series: Any) -> RuleConfig:
+    """The format config with the series' ``points_system`` overrides applied.
+
+    ``points_system`` is a JSON object on the series (``{"points_win": 4,
+    "points_no_result": 0, ...}``); unknown keys are ignored. ``dataclasses.replace``
+    keeps the frozen ``RuleConfig`` contract — only the five points fields move.
+    """
+    if series is None or not series.points_system:
+        return config
+    overrides = {
+        key: int(series.points_system[key])
+        for key in ("points_win", "points_tie", "points_no_result", "points_draw", "points_loss")
+        if key in series.points_system
+    }
+    return (
+        dataclasses.replace(config, **cast(dict[str, Any], overrides)) if overrides else config
+    )
+
+
+def _result_char(line: TeamMatchLine) -> str:
+    """One form character: W/L/T/D/N (TIE/DRAW/NO_RESULT + win/loss)."""
+    if line.is_no_result:
+        return "N"
+    if line.result_type is ResultType.TIE:
+        return "T"
+    if line.result_type is ResultType.DRAW:
+        return "D"
+    if line.result_type in _WIN_RESULTS:
+        return "W" if line.won else "L"
+    return "N"
+
+
+def _form_string(chars: Sequence[str]) -> str | None:
+    """Most-recent-first window of 5 result characters (empty → ``None``)."""
+    window = list(chars)[-5:]
+    return "".join(reversed(window)) if window else None
+
+
 def _recompute_standings_key(parts: list[str]) -> None:
-    from apps.competitions.models import MatchStage
+    from apps.competitions.models import MatchStage, Series
 
     series_id = UUID(parts[1])
     stage_id = None if parts[2] == "-" else UUID(parts[2])
 
+    series = Series.objects.filter(id=series_id).first()
     matches = list(
         Match.objects.filter(series_id=series_id, status=MatchStatus.COMPLETED).order_by(
             "start_time_utc", "id"
@@ -585,10 +625,14 @@ def _recompute_standings_key(parts: list[str]) -> None:
         TournamentStandings.objects.filter(series_id=series_id, stage_id=stage_id).delete()
         return
 
+    base_config = preset_for_format(Format(matches[0].format_type))
+    config = _config_for_series(base_config, series)
+
     team_ids: list[str] = []
     lines: list[TeamMatchLine] = []
     source: list[dict[str, Any]] = []
-    config = preset_for_format(Format(matches[0].format_type))
+    #: team id → result chars in match (oldest→newest) order, for the form window.
+    form_chars: dict[str, list[str]] = {}
     for match in matches:
         for raw_tid in match.teams.values_list("team_id", flat=True):
             tid = str(raw_tid)
@@ -597,9 +641,17 @@ def _recompute_standings_key(parts: list[str]) -> None:
             line, _wkts, src = _team_match_source(match, tid, config)
             lines.append(line)
             source.append(src)
+            if line.result_type is not None:
+                form_chars.setdefault(tid, []).append(_result_char(line))
     source.sort(key=lambda s: s["match_id"])
     rows = build_standings(team_ids, lines, config)
-    digest = _digest(source, config.version)
+    # The effective points config is part of the inputs: changing
+    # points_system must change the digest so a recompute actually triggers.
+    points_config = {
+        key: getattr(config, key)
+        for key in ("points_win", "points_tie", "points_no_result", "points_draw", "points_loss")
+    }
+    digest = _digest([*source, {"points_config": points_config}], config.version)
     coverage = _coverage_matches(matches)
 
     stage = None
@@ -608,7 +660,21 @@ def _recompute_standings_key(parts: list[str]) -> None:
         stage = MatchStage.objects.filter(id=stage_id).first()
         group_name = stage.group_name if stage else None
 
+    no_of_qual_default = (
+        int(series.points_system["no_of_qual"])
+        if series is not None and series.points_system and "no_of_qual" in series.points_system
+        else None
+    )
+
     for row in rows:
+        existing = TournamentStandings.objects.filter(
+            series_id=series_id, stage_id=stage_id, team_id=row.team_id
+        ).first()
+        if existing is not None and existing.inputs_digest == digest:
+            continue
+        # Steward-set fields survive recomputes; only fresh rows pick defaults.
+        qualify_status = existing.qualify_status if existing is not None else None
+        no_of_qual = existing.no_of_qual if existing is not None else no_of_qual_default
         defaults: dict[str, Any] = {
             "stage": stage,
             "group_name": group_name,
@@ -621,9 +687,9 @@ def _recompute_standings_key(parts: list[str]) -> None:
             "no_result": row.no_result,
             "points": row.points,
             "nrr": _dec(row.nrr, 3),
-            "form": None,  # Group 3 (standings + NRR) adds the form string.
-            "qualify_status": None,
-            "no_of_qual": None,
+            "form": _form_string(form_chars.get(row.team_id, ())),
+            "qualify_status": qualify_status,
+            "no_of_qual": no_of_qual,
             "rule_version": config.version,
             "inputs_digest": digest,
             "source_kind": SourceKind.COMPUTED,
@@ -633,11 +699,6 @@ def _recompute_standings_key(parts: list[str]) -> None:
             "last_match_date": coverage["last_match_date"],
             "is_partial": False,
         }
-        existing = TournamentStandings.objects.filter(
-            series_id=series_id, stage_id=stage_id, team_id=row.team_id
-        ).first()
-        if existing is not None and existing.inputs_digest == digest:
-            continue
         defaults["revision"] = (existing.revision + 1) if existing else 1
         defaults["computed_at"] = timezone.now()
         TournamentStandings.objects.update_or_create(
@@ -649,6 +710,79 @@ def _recompute_standings_key(parts: list[str]) -> None:
     TournamentStandings.objects.filter(series_id=series_id, stage_id=stage_id).exclude(
         team_id__in=team_ids
     ).delete()
+
+
+def _nrr_for_diff(value: float | Decimal | None) -> float | None:
+    """NRR rounded to 3 dp for reconciliation comparison (provider tolerance)."""
+    if value is None:
+        return None
+    return round(float(value), 3)
+
+
+def _diff_standings(
+    ours: Mapping[str, Mapping[str, Any]],
+    provider_rows: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Per-team field diffs between pipeline and provider standings rows."""
+    differences: dict[str, Any] = {}
+    fields = ("played", "won", "lost", "tied", "drawn", "no_result", "points", "nrr")
+    for team_id in sorted(set(ours) | set(provider_rows)):
+        a, b = ours.get(team_id), provider_rows.get(team_id)
+        if a is None or b is None:
+            differences[team_id] = {"ours": a, "provider": b}
+            continue
+        for key in fields:
+            left = _nrr_for_diff(a.get(key)) if key == "nrr" else a.get(key)
+            right = _nrr_for_diff(b.get(key)) if key == "nrr" else b.get(key)
+            if left != right:
+                differences.setdefault(team_id, {})[key] = {"ours": left, "provider": right}
+    return differences
+
+
+def reconcile_standings(
+    series_id: Any,
+    provider_rows: Mapping[str, Mapping[str, Any]],
+    *,
+    stage_id: Any = None,
+    provider: Any = None,
+) -> Any:
+    """Diff the pipeline's standings against the provider's points table.
+
+    ``provider_rows`` maps team id (str) → ``{played, won, lost, tied, drawn,
+    no_result, points, nrr}``. The pipeline standings for the series/stage are
+    recomputed fresh, then diffed. A mismatch opens a ``ReconciliationJob``
+    (``scope_key = standings:{series}:{stage|'-'}``) and writes the
+    ``reconciliation_mismatch`` DLQ row — never a silent correction (the
+    reconciliation invariant). Returns the job, or ``None`` when they agree.
+    """
+    from apps.synchronization.services.reconciliation import open_job, report_mismatch
+
+    stage_key = stage_id if stage_id is not None else "-"
+    recompute_keys([f"standings:{series_id}:{stage_key}"])
+
+    ours: dict[str, dict[str, Any]] = {}
+    for row in TournamentStandings.objects.filter(series_id=series_id, stage_id=stage_id):
+        ours[str(row.team_id)] = {
+            "played": row.matches_played,
+            "won": row.matches_won,
+            "lost": row.matches_lost,
+            "tied": row.matches_tied,
+            "drawn": row.matches_drawn,
+            "no_result": row.no_result,
+            "points": row.points,
+            "nrr": _nrr_for_diff(row.nrr),
+        }
+    differences = _diff_standings(ours, provider_rows)
+    if not differences:
+        return None
+    job = open_job(
+        f"standings:{series_id}:{stage_key}",
+        expected={"provider_rows": dict(provider_rows)},
+        observed={"pipeline_rows": dict(ours)},
+        differences=differences,
+    )
+    report_mismatch(job, provider=provider)
+    return job
 
 
 def _recompute_key(key: str) -> None:
@@ -921,6 +1055,7 @@ __all__ = [
     "rebuild_statistics",
     "recompute_keys",
     "recompute_match",
+    "reconcile_standings",
     "register",
     "sweep_stale_statistics",
 ]
