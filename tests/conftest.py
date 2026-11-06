@@ -10,7 +10,6 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from django.core.cache import cache
 
 FROZEN_INSTANT = datetime(2026, 10, 29, 12, 0, 0, tzinfo=UTC)
 
@@ -107,20 +106,29 @@ def _flush_includes_unmanaged_app_tables() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def _clear_cache() -> Iterator[None]:
-    """Keep the in-memory cache isolated between tests.
+    """Keep the in-memory cache aliases isolated between tests.
 
     No-op when Django is not configured (e.g. the pure scoring suite under
-    mutmut, which runs without Django settings): ``cache.clear()`` would force
-    a settings lookup that cannot succeed there.
+    mutmut, which runs without Django settings): clearing would force a
+    settings lookup that cannot succeed there.
     """
     from django.conf import settings
 
     if not settings.configured:
         yield
         return
-    cache.clear()
+    from django.core.cache import caches
+
+    def clear_all() -> None:
+        for alias in ("default", "cache"):
+            try:
+                caches[alias].clear()
+            except Exception:  # alias absent in a specialised settings module
+                continue
+
+    clear_all()
     yield
-    cache.clear()
+    clear_all()
 
 
 @pytest.fixture(autouse=True)
@@ -147,5 +155,26 @@ def _isolate_event_subscriptions() -> Iterator[None]:
     events.subscribe(events.TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
     events.subscribe(events.TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
     events.subscribe(events.TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
+    # Phase E: cache invalidation subscribers live in core and are cleared by
+    # ``clear_subscriptions`` above, so re-attach them for every test, and
+    # reset the CDN purge hook (tests configure their own fake when needed).
+    from apps.core.cache import invalidation, purger
+
+    invalidation.resubscribe()
+    invalidation.configure_purger(purger.NoopCachePurger())
+    # Fresh rate-limit buckets per test (the in-process test backend must not
+    # accumulate across tests sharing a client IP), a clean connection-cap
+    # counter for the SSE/WS transport tests, and a clean metric slate so
+    # counter assertions (throttling, realtime) start from zero.
+    from apps.core import metrics
+    from apps.core.throttling import reset_connection_limiter, reset_limiter
+
+    reset_limiter()
+    reset_connection_limiter()
+    metrics.reset()
     yield
     events.clear_subscriptions()
+    invalidation.configure_purger(purger.NoopCachePurger())
+    reset_limiter()
+    reset_connection_limiter()
+    metrics.reset()

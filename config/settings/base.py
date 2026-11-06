@@ -8,9 +8,17 @@ All runtime configuration comes from the environment via ``django-environ``;
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
+
+
+def _url_with_db(url: str, db: int) -> str:
+    """Return ``url`` pointing at Redis logical database ``db``."""
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, f"/{db}", parts.query, parts.fragment))
+
 
 # --------------------------------------------------------------------------- #
 # Paths & environment
@@ -154,6 +162,7 @@ LOCAL_APPS = [
     "apps.ingestion",
     "apps.synchronization",
     "apps.live",
+    "apps.realtime",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -241,13 +250,72 @@ CRICSHEET_KEY_ALLOWLIST = ["key_opta", "key_pulse"]
 # --------------------------------------------------------------------------- #
 # Cache / Celery
 # --------------------------------------------------------------------------- #
+# One base URL; each logical role gets its own database by default so an
+# `allkeys-lru` cache eviction can never drop a Celery broker task or a rate
+# limit counter (Phase E task 1; docs/REALTIME_AND_CACHING.md).
+REDIS_URL = env("REDIS_URL")
+CACHE_REDIS_URL = env("CACHE_REDIS_URL", default=REDIS_URL)
+PUBSUB_REDIS_URL = env("PUBSUB_REDIS_URL", default=_url_with_db(REDIS_URL, 3))
+RATELIMIT_REDIS_URL = env("RATELIMIT_REDIS_URL", default=_url_with_db(REDIS_URL, 4))
+# Bounded client timeouts: a slow Redis degrades a feature, never a request.
+REDIS_SOCKET_TIMEOUT_SECONDS = env.float("REDIS_SOCKET_TIMEOUT_SECONDS", default=0.25)
+REDIS_CONNECT_TIMEOUT_SECONDS = env.float("REDIS_CONNECT_TIMEOUT_SECONDS", default=0.5)
+REDIS_HEALTH_CHECK_INTERVAL_SECONDS = env.int("REDIS_HEALTH_CHECK_INTERVAL_SECONDS", default=30)
+REDIS_MAX_CONNECTIONS = env.int("REDIS_MAX_CONNECTIONS", default=100)
+# Header carrying a response's surrogate keys (CDN purge tags). Configurable
+# because CDN providers allow renaming it; see docs/REALTIME_AND_CACHING.md.
+CACHE_SURROGATE_HEADER = env("CACHE_SURROGATE_HEADER", default="Surrogate-Key")
+# Number of trusted proxies between the internet and the origin (SECURITY §2
+# trust model). The rightmost that many ``X-Forwarded-For`` entries are trusted
+# as added by our edge; 0 = ignore the header entirely.
+TRUSTED_PROXY_HOPS = env.int("TRUSTED_PROXY_HOPS", default=0)
+# CDN purge endpoint (``PURGE`` by surrogate key). Empty = no CDN: origin
+# invalidation is handled by the version-bump registry and this hook is a no-op.
+CACHE_PURGE_URL = env("CACHE_PURGE_URL", default="")
+
+# Token-bucket throttling (API_SPEC §7): scope -> (tokens/second, burst).
+# ``deliveries`` (ball-level) is stricter than the generous default; the
+# SSE/WS connect endpoints add their own connection caps (Groups 7/8).
+RATELIMIT_RATES = {
+    "default": (10.0, 120.0),
+    "deliveries": (2.0, 20.0),
+}
+# Backend for the bucket store: ``redis`` (the ``ratelimit`` role) or
+# ``in_process`` (tests; also the degraded-mode fallback at runtime).
+RATELIMIT_BACKEND = env("RATELIMIT_BACKEND", default="redis")
+# Optional per-API-key buckets: the header to read the key from. Empty disables
+# the key hook entirely (no key issuance/user accounts in scope).
+RATELIMIT_KEY_HEADER = env("RATELIMIT_KEY_HEADER", default="")
+
+# --- Realtime transports (SSE/WS, API_SPEC §3.8) ---------------------------
+# SSE heartbeat: a comment line every N seconds keeps proxies from closing an
+# idle one-way scoreboard stream.
+REALTIME_SSE_HEARTBEAT_SECONDS = env("REALTIME_SSE_HEARTBEAT_SECONDS", default=15)
+# Cross-origin streams are rejected unless the Origin matches the request host
+# or is listed here (comma-separated; browser clients always send Origin).
+REALTIME_ALLOWED_ORIGINS = env("REALTIME_ALLOWED_ORIGINS", default="")
+# Per-node connection caps (ConnectionLimiter is per process, fail-open): a
+# single IP cannot monopolize a node, a hot match cannot starve other matches,
+# and the node has a hard bound so memory stays bounded.
+REALTIME_CONNECTION_CAP_PER_IP = env("REALTIME_CONNECTION_CAP_PER_IP", default=8)
+REALTIME_CONNECTION_CAP_PER_MATCH = env("REALTIME_CONNECTION_CAP_PER_MATCH", default=2000)
+REALTIME_CONNECTION_CAP_PER_NODE = env("REALTIME_CONNECTION_CAP_PER_NODE", default=10000)
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env("REDIS_URL"),
+        "LOCATION": CACHE_REDIS_URL,
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
         "KEY_PREFIX": "cricket",
-    }
+    },
+    # Phase E uses the `cache` alias explicitly; tests swap both aliases to
+    # LocMem so the cache suite needs no Redis.
+    "cache": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": CACHE_REDIS_URL,
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "KEY_PREFIX": "cricket",
+    },
 }
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL")

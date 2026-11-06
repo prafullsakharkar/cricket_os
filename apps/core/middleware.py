@@ -15,6 +15,7 @@ from collections.abc import Callable
 from django.http import HttpRequest, HttpResponse
 
 from apps.core.logging import reset_request_id, set_request_id
+from apps.core.net import client_ip
 
 logger = logging.getLogger("apps.core.middleware")
 
@@ -46,6 +47,8 @@ class RequestIDMiddleware:
                 "path": request.path,
                 "status": response.status_code,
                 "duration_ms": duration_ms,
+                # Trusted-proxy aware (SECURITY §2); used by rate limiting too.
+                "client_ip": client_ip(request),
             },
         )
         return response

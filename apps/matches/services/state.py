@@ -281,6 +281,12 @@ def transition(
             event_log.append_event(match.id, event_schemas.MATCH_STATE_CHANGED, payload)
     match.refresh_from_db()
     payload = {"match_id": str(match.id), **payload}
+    if emit_event:
+        # Cache invalidation (Phase E) and any other in-process consumer run
+        # after commit; the durable event-log row above is the source of truth.
+        from apps.core.events import TOPIC_MATCH_STATE_CHANGED, publish
+
+        publish(TOPIC_MATCH_STATE_CHANGED, payload)
     return TransitionResult(
         match=match,
         previous_status=previous,

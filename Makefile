@@ -5,7 +5,7 @@ MANAGE := $(UV) run python manage.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-identity test-nocov lint fmt typecheck imports check shell
+.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-identity test-nocov test-loadtest-smoke lint fmt typecheck imports check shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -59,6 +59,9 @@ test-identity: ## Enforce 100% line+branch on the identity engine (scoring + mer
 
 test-nocov: ## Run tests without the coverage gate (fast inner loop)
 	$(UV) run pytest
+
+test-loadtest-smoke: ## Phase E load smoke: cached-read p95 <= 200ms, fan-out <= 1s
+	DJANGO_SETTINGS_MODULE=config.settings.test $(UV) run python loadtests/smoke_gate.py
 
 lint: ## Lint + format check (ruff)
 	$(UV) run ruff check .

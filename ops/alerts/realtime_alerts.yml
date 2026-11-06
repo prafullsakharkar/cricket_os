@@ -1,0 +1,140 @@
+# Realtime + caching alert rules (API_SPEC §3.8, PERFORMANCE §8, SECURITY §11,
+# ROADMAP Phase E).
+#
+# Every alert maps to a runbook in docs/RUNBOOKS.md. Thresholds are
+# configuration, not code — tune here, redeploy the rule group, never touch a
+# service. Metric names come from apps/core/metrics.py (the in-process facade
+# renders the same names).
+#
+# NOTE: this is a static rule file for the Prometheus-compatible operator.
+# `prometheus_client` is not installed in the offline build image, so these
+# rules are validated by tests/phase_d/test_observability.py (YAML parse +
+# metric-name/runbook cross-checks) rather than by a live Prometheus here.
+groups:
+  - name: realtime_and_cache
+    rules:
+      # The Redis pub/sub feed is down on this node; the broker is polling the
+      # durable log instead. Delivery continues but at poll cadence, not
+      # event-time.
+      - alert: RealtimeDegraded
+        expr: |
+          realtime_degraded == 1
+        for: 2m
+        labels:
+          severity: warning
+          runbook: "realtime degraded"
+        annotations:
+          summary: "Realtime broker is degraded on {{ $labels.instance }}"
+          description: "Redis pub/sub is unavailable; the broker polls match_event_log for active matches. See runbook: realtime degraded."
+
+      # Subscribers are dropping coalesced batches (bounded queues full). The
+      # log is intact — clients resync on reconnect — but a sustained rate
+      # means a slow-consumer or fan-out capacity problem.
+      - alert: RealtimeDroppedHigh
+        expr: |
+          increase(realtime_dropped_frames_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          runbook: "realtime backpressure"
+        annotations:
+          summary: "Realtime frames dropped for slow subscribers ({{ $value }} in 5m)"
+          description: "Bounded per-subscriber queues are full. Clients recover via seq-based replay on reconnect. See runbook: realtime backpressure."
+
+      # Pub/sub delivered a seq run with a hole; the hub replayed the missing
+      # run from the log. Occasional gaps are normal under Redis pressure;
+      # sustained gaps mean messages are being lost between publication and
+      # subscription.
+      - alert: RealtimeGapBackfills
+        expr: |
+          increase(realtime_gap_backfills_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          runbook: "realtime gap"
+        annotations:
+          summary: "Realtime seq gaps backfilled from the log ({{ $value }} in 5m)"
+          description: "The hub detected missing seq runs and replayed them via events_since. See runbook: realtime gap."
+
+      # Clients are being told to refetch the snapshot (retention window
+      # exceeded). A spike means many clients reconnected with stale positions
+      # (client bug) or a long pub/sub outage pushed everyone past retention.
+      - alert: RealtimeResyncsHigh
+        expr: |
+          increase(realtime_resyncs_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          runbook: "realtime resync"
+        annotations:
+          summary: "{{ $value }} resync_required frames in 5m"
+          description: "Clients requested positions outside the retained window and must refetch the snapshot. See runbook: realtime resync."
+
+      # Connection caps are rejecting streams (per-IP/per-match/per-node).
+      # A single client IP or a hot match can legitimately trip the cap; a
+      # sustained high rate is an overload signal or a broken auto-reconnect
+      # loop.
+      - alert: RealtimeCapDeniedHigh
+        expr: |
+          increase(realtime_cap_denied_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "connection caps"
+        annotations:
+          summary: "{{ $value }} realtime connections denied by caps in 5m"
+          description: "SSE/WS streams rejected with 429/4429. See runbook: connection caps."
+
+      # The per-node connection budget (default 10000, REALTIME_CONNECTION_
+      # CAP_PER_NODE) is nearly exhausted; a node cannot absorb much more
+      # fan-out. Scale out or raise the cap after capacity planning.
+      - alert: RealtimeConnectionsNearCap
+        expr: |
+          realtime_connections > 8000
+        for: 10m
+        labels:
+          severity: warning
+          runbook: "connection caps"
+        annotations:
+          summary: "Realtime connections at {{ $value }} (near the 10000 node cap)"
+          description: "The node is close to its connection budget. See runbook: connection caps."
+
+      # The local cache breaker is OPEN: every read falls through to a direct
+      # build (correct but expensive). Redis cache down or unresponsive.
+      - alert: CacheBreakerOpen
+        expr: |
+          cache_breaker_open == 1
+        for: 2m
+        labels:
+          severity: critical
+          runbook: "cache breaker"
+        annotations:
+          summary: "Cache breaker OPEN — reads are building without the cache"
+          description: "Requests degrade to direct builds; API latency rises. See runbook: cache breaker."
+
+      # Requests served without the cache (breaker open or a Redis error on a
+      # read path). Distinct from the breaker gauge: this counts the traffic.
+      - alert: CacheDegraded
+        expr: |
+          increase(cache_degraded_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          runbook: "cache breaker"
+        annotations:
+          summary: "{{ $value }} cache-degraded requests in 5m"
+          description: "Reads are bypassing the cache. See runbook: cache breaker."
+
+      # Miss ratio above 50% over 15m: keys are churning (TTL too short),
+      # an invalidation storm is flushing the namespace, or the workload mix
+      # changed. Hits/misses are namespaced; check which namespace dominates.
+      - alert: CacheMissRatioHigh
+        expr: |
+          sum(rate(cache_misses_total[15m])) / (sum(rate(cache_hits_total[15m])) + sum(rate(cache_misses_total[15m]))) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          runbook: "cache miss ratio"
+        annotations:
+          summary: "Cache miss ratio is {{ $value | humanizePercentage }} over 15m"
+          description: "Most reads miss the cache. Check per-namespace hits/misses and the invalidation rate. See runbook: cache miss ratio."

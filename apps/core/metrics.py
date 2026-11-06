@@ -208,8 +208,72 @@ INGEST_LATENCY = metric(
 )
 FRESHNESS_ALERTS = metric("freshness_alerts_total", "Stale live matches observed")
 
+# Phase E — cache + realtime observability (PERFORMANCE §12, SECURITY §8).
+CACHE_HITS = metric("cache_hits_total", "Read-through cache hits", labelnames=("namespace",))
+CACHE_MISSES = metric("cache_misses_total", "Read-through cache misses", labelnames=("namespace",))
+CACHE_STALE = metric(
+    "cache_stale_served_total", "Stale entries served while revalidating", labelnames=("namespace",)
+)
+CACHE_DEGRADED = metric(
+    "cache_degraded_total", "Requests served without the cache (breaker open or error)"
+)
+CACHE_INVALIDATIONS = metric(
+    "cache_invalidations_total", "Cache namespaces invalidated by a domain event"
+)
+CACHE_PURGES = metric("cache_purges_total", "Surrogate-key purges sent to a CDN")
+CACHE_BUILD_SECONDS = metric(
+    "cache_build_seconds", "Time spent rebuilding a cache entry", kind="histogram"
+)
+CACHE_BREAKER_OPEN = metric(
+    "cache_breaker_open", "Local cache breaker state (0=closed, 1=open)", kind="gauge"
+)
+# Realtime fan-out (API_SPEC §3.8, PERFORMANCE §8, SECURITY §8).
+REALTIME_CONNECTIONS = metric(
+    "realtime_connections", "Subscribed connections on this node", kind="gauge"
+)
+REALTIME_FANOUT_FRAMES = metric("realtime_fanout_frames_total", "Frames delivered to subscribers")
+REALTIME_COALESCED = metric(
+    "realtime_coalesced_batches_total", "Coalesced batch frames emitted (≤1 Hz)"
+)
+REALTIME_DROPPED = metric(
+    "realtime_dropped_frames_total", "Frames dropped for a slow (full-queue) subscriber"
+)
+REALTIME_GAP_BACKFILLS = metric(
+    "realtime_gap_backfills_total", "Missing seq runs replayed from the event log"
+)
+REALTIME_RESYNCS = metric(
+    "realtime_resyncs_total", "resync_required frames sent (unreplayable position)"
+)
+REALTIME_INVALID_FRAMES = metric(
+    "realtime_invalid_frames_total", "Broker messages rejected as malformed/oversized"
+)
+REALTIME_DEGRADED = metric(
+    "realtime_degraded", "Realtime broker in degraded polling mode (0/1)", kind="gauge"
+)
+REALTIME_DRAINS = metric("realtime_drains_total", "Graceful hub drains performed")
+REALTIME_CAP_DENIED = metric(
+    "realtime_cap_denied_total",
+    "Stream/WS connections rejected by the per-node connection caps",
+)
+# Throttling (API_SPEC §7).
+RATE_LIMIT_DENIED = metric(
+    "rate_limit_denied_total", "Requests denied by the token-bucket limiter", labelnames=("scope",)
+)
+RATE_LIMIT_FALLBACK = metric(
+    "rate_limit_fallback_total",
+    "Requests limited by the per-process fallback store (primary store down)",
+)
+
 __all__ = [
     "BREAKER_STATE",
+    "CACHE_BREAKER_OPEN",
+    "CACHE_BUILD_SECONDS",
+    "CACHE_DEGRADED",
+    "CACHE_HITS",
+    "CACHE_INVALIDATIONS",
+    "CACHE_MISSES",
+    "CACHE_PURGES",
+    "CACHE_STALE",
     "CORRECTIONS",
     "DELIVERIES_PER_MINUTE",
     "DLQ_DEPTH",
@@ -222,6 +286,18 @@ __all__ = [
     "JOBS_PER_MINUTE",
     "MATCH_FRESHNESS_SECONDS",
     "PROVIDER_LAG_SECONDS",
+    "RATE_LIMIT_DENIED",
+    "RATE_LIMIT_FALLBACK",
+    "REALTIME_CAP_DENIED",
+    "REALTIME_COALESCED",
+    "REALTIME_CONNECTIONS",
+    "REALTIME_DEGRADED",
+    "REALTIME_DRAINS",
+    "REALTIME_DROPPED",
+    "REALTIME_FANOUT_FRAMES",
+    "REALTIME_GAP_BACKFILLS",
+    "REALTIME_INVALID_FRAMES",
+    "REALTIME_RESYNCS",
     "SHADOW_VERIFY_MISMATCHES",
     "Metric",
     "metric",

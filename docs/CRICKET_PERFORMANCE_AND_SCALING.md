@@ -141,23 +141,42 @@ counter that is part of the cache key) to avoid wildcard deletes.
 
 ## 8. Real-time fan-out
 
-- **Topology:** `scoring engine → Redis pub/sub channel match:{id} →`
-  each web node subscribes and pushes to its connected WS/SSE clients.
+- **Topology:** `scoring engine → Redis pub/sub channel match:{id} (role DB 3) →`
+  each web node's broker → the shared local hub → the connected WS/SSE clients
+  (implemented in Phase E; see [REALTIME_AND_CACHING.md](REALTIME_AND_CACHING.md)).
 - **Hot-match problem:** one match may have millions of subscribers. Mitigations:
   1. Prefer **SSE** for one-way scoreboards (cheaper than WS).
   2. **Delta events** (a single delivery JSON, not the full scorecard).
-  3. **Coalescing**: batch rapid deliveries into a ≤1 Hz update per client.
-  4. **CDN + short-poll fallback**: clients without WS/SSE poll the cached
+  3. **Coalescing**: ordinary deltas batch into one ≤1 Hz `batch` frame per
+     client; corrections/terminal transitions flush immediately.
+  4. **Backpressure**: bounded per-subscriber queues (64 frames); a slow
+     consumer gets drops, not memory — recovery is the seq-based replay on
+     reconnect.
+  5. **CDN + short-poll fallback**: clients without WS/SSE poll the cached
      endpoint (already served by CDN) — the system degrades gracefully.
-  5. Horizontal scale of the pub/sub tier; sticky-free because all nodes
+  6. Horizontal scale of the pub/sub tier; sticky-free because all nodes
      subscribe to the same Redis channels.
-- **Event log:** the `realtime` module owns `match_event_log`, carrying a
-  monotonic **per-match** `seq` (distinct from the per-innings `delivery_seq`).
-  Events are retained for a configurable window after completion (default 24 h),
-  then purged.
-- **Reconnection:** on reconnect the client sends `last_seq`; the server replays
-  from `match_event_log`. If `last_seq` predates the retained range it responds
-  `resync_required` → REST refetch. No gaps.
+- **Degradation:** Redis pub/sub is best-effort. On transport failure a node's
+  broker switches to **degraded polling** of the durable `match_event_log`
+  (`realtime_degraded`), and recovers automatically when Redis returns. A Redis
+  outage degrades freshness, never availability, and the log guarantees no event
+  is permanently lost (gap/backfill replays missing runs via `events_since`).
+- **Event log:** the durable per-match `match_event_log` (in `matches`) carries a
+  monotonic **per-match** `seq` (distinct from the per-innings `delivery_seq`)
+  and is the **source of truth** for both caching and realtime. Events are
+  retained for a configurable window after completion (default 24 h), then
+  purged.
+- **Reconnection:** on reconnect the client sends its last seen `seq`
+  (`Last-Event-ID`/`from_seq` for SSE, `from_seq` for WS); the server replays
+  from `match_event_log`. If the position predates the retained range it delivers
+  `resync_required` → REST refetch. No gaps (the REST snapshot's `meta.event_seq`
+  handoff makes it exactly-once).
+- **Connection caps:** per-IP 8, per-match 2000, per-node 10000 (fail-open,
+  in-process); Origin allowlist rejects cross-site streams. Both are checked
+  before a subscription is created.
+- **Budgets:** `make test-loadtest-smoke` enforces p95 cached read ≤ 200 ms and
+  fan-out ≤ 1 s in CI (`loadtests/`); k6 scripts in `loadtests/k6/` cover
+  manual capacity runs.
 
 ---
 

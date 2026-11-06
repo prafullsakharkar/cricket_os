@@ -9,11 +9,18 @@ Four endpoints under ``/api/v1/matches/{id}/``:
 * ``GET /matches/{id}/innings/{n}/deliveries`` — partition-pruned
   ball-by-ball with a cursor on ``delivery_seq``.
 
-All four use :class:`CacheControlMixin` with **state-dependent TTLs**
-(spec §3.9): live matches are seconds-level (``max-age=5, swr=5``),
-terminal matches long-lived (``max-age=300, swr=600``). The strong ETag is
-the digest of the rendered payload, so a correction (revision bump) changes
-it automatically and ``If-None-Match`` answers ``304``.
+Every response is served through :class:`~apps.core.cache_views.CachedReadMixin`
+with **state-dependent TTLs** (spec §3.9 / PERFORMANCE §5): live matches are
+seconds-level (``max-age=5, swr=5``), terminal matches long-lived with a CDN
+TTL and ``stale-if-error``, and ``immutable`` appears only after the
+post-completion reconciliation window. The strong ETag is the digest of the
+rendered payload, so a correction (revision bump) changes it automatically and
+``If-None-Match`` answers ``304``.
+
+Every match-scoped payload carries **``meta.event_seq``**: the highest
+event-log ``seq`` reflected in the snapshot (API_SPEC §3.8). It is captured
+atomically with the data via :func:`consistent_snapshot`, so a client can load
+REST and subscribe from ``meta.event_seq`` without gaps or duplicates.
 
 The deliveries endpoint cannot use the core ``CursorPagination`` (its
 tiebreaker is the model PK, which is a composite ``(id, match_date)`` for the
@@ -27,16 +34,19 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import time
 from typing import Any
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.errors import InvalidQuery
-from apps.core.http import CacheControlMixin
+from apps.core.cache.policy import for_match
+from apps.core.cache_views import CachedReadMixin
+from apps.core.errors import InvalidQuery, NotFound
 from apps.matches.selectors.reads import (
-    TERMINAL_STATUSES,
     _delivery_payload,
+    consistent_snapshot,
+    current_event_seq,
     deliveries_queryset,
     get_innings,
     get_match,
@@ -45,20 +55,36 @@ from apps.matches.selectors.reads import (
     match_shell,
 )
 
-_LIVE_MAX_AGE = 5
-_LIVE_SWR = 5
-_COMPLETED_MAX_AGE = 300
-_COMPLETED_SWR = 600
-
 _DELIVERY_DEFAULT_LIMIT = 50
 _DELIVERY_MAX_LIMIT = 100
 
 
-def _cache_ttl(match: Any) -> tuple[int, int | None]:
-    """Per-match cache TTLs: live is seconds-level, terminal is long-lived."""
-    if match.status in TERMINAL_STATUSES:
-        return _COMPLETED_MAX_AGE, _COMPLETED_SWR
-    return _LIVE_MAX_AGE, _LIVE_SWR
+def _ended_at(match: Any) -> float | None:
+    """Epoch seconds of ``end_time_utc`` (the immutable-window input)."""
+    return match.end_time_utc.timestamp() if match.end_time_utc else None
+
+
+class _MatchCachedView(CachedReadMixin, APIView):
+    """Shared caching identity for all ``/matches/{id}`` sub-resources."""
+
+    def cache_parts(self, request: Any, *args: Any, **kwargs: Any) -> tuple[str, ...]:
+        return (kwargs["pk"],)
+
+    def cache_version_ns(self, request: Any, *args: Any, **kwargs: Any) -> str:
+        return f"match:{kwargs['pk']}"
+
+    def cache_surrogates(self, request: Any, *args: Any, **kwargs: Any) -> tuple[str, ...]:
+        return (f"match-{kwargs['pk']}",)
+
+    def cache_plan(self) -> Any:
+        match = getattr(self, "_match", None)
+        if match is None:
+            try:
+                match = get_match(self.kwargs["pk"])
+            except NotFound:
+                # A missing match is a 404 (never cached); any plan is fine.
+                return for_match("", ended_at=None, now=time.time())
+        return for_match(match.status, ended_at=_ended_at(match), now=time.time())
 
 
 def _as_int_param(request: Any, name: str, *, minimum: int | None = None) -> int | None:
@@ -80,34 +106,54 @@ def _as_int_param(request: Any, name: str, *, minimum: int | None = None) -> int
 # --------------------------------------------------------------------------- #
 
 
-class MatchDetailView(CacheControlMixin, APIView):
+class MatchDetailView(_MatchCachedView):
     """``GET /matches/{id}/`` — match shell + state."""
 
+    cache_namespace = "match:shell"
+
     def get(self, request: Any, pk: str) -> Response:
-        match = get_match(pk)
-        self.cache_max_age, self.cache_swr = _cache_ttl(match)
-        return Response({"data": match_shell(match)})
+        with consistent_snapshot():
+            match = get_match(pk)
+            data = match_shell(match)
+            seq = current_event_seq(match.id)
+        self._match = match
+        self._event_seq = seq
+        return Response({"data": data, "meta": {"event_seq": seq}})
 
 
-class ScorecardView(CacheControlMixin, APIView):
+class ScorecardView(_MatchCachedView):
     """``GET /matches/{id}/scorecard`` — innings-indexed cards."""
 
+    cache_namespace = "match:scorecard"
+
     def get(self, request: Any, pk: str) -> Response:
-        match = get_match(pk)
         innings_number = _as_int_param(request, "innings", minimum=1)
         if innings_number is not None and innings_number > 4:
             raise InvalidQuery("innings must be 1..4", details={"innings": innings_number})
-        self.cache_max_age, self.cache_swr = _cache_ttl(match)
-        return Response({"data": match_scorecard(match, innings_number=innings_number)})
+        with consistent_snapshot():
+            match = get_match(pk)
+            data = match_scorecard(match, innings_number=innings_number)
+            seq = current_event_seq(match.id)
+        data["meta"]["event_seq"] = seq
+        self._match = match
+        self._event_seq = seq
+        return Response({"data": data})
 
 
-class InningsView(CacheControlMixin, APIView):
+class InningsView(_MatchCachedView):
     """``GET /matches/{id}/innings`` — innings list & progression."""
 
+    cache_namespace = "match:innings"
+
     def get(self, request: Any, pk: str) -> Response:
-        match = get_match(pk)
-        self.cache_max_age, self.cache_swr = _cache_ttl(match)
-        return Response({"data": list_innings(match)})
+        with consistent_snapshot():
+            match = get_match(pk)
+            data = list_innings(match)
+            seq = current_event_seq(match.id)
+        data["meta"]["event_seq"] = seq
+        self._match = match
+        self._event_seq = seq
+        return Response({"data": data})
 
 
 def _encode_delivery_cursor(delivery_seq: int) -> str:
@@ -128,7 +174,7 @@ def _decode_delivery_cursor(cursor: str) -> int:
     return seq
 
 
-class DeliveriesView(CacheControlMixin, APIView):
+class DeliveriesView(_MatchCachedView):
     """``GET /matches/{id}/innings/{n}/deliveries`` — ball-by-ball feed.
 
     Filters: ``from_seq``, ``to_seq``, ``over``. Pagination is a cursor on
@@ -137,50 +183,60 @@ class DeliveriesView(CacheControlMixin, APIView):
     via ``match_date``.
     """
 
-    def get(self, request: Any, pk: str, innings_number: int) -> Response:
-        match = get_match(pk)
-        innings = get_innings(match, innings_number)
+    cache_namespace = "match:deliveries"
+    # Ball-level endpoint: stricter token bucket than the default scope (§7).
+    throttle_scope = "deliveries"
 
+    def cache_parts(self, request: Any, *args: Any, **kwargs: Any) -> tuple[str, ...]:
+        return (kwargs["pk"], str(kwargs["innings_number"]))
+
+    def get(self, request: Any, pk: str, innings_number: int) -> Response:
         from_seq = _as_int_param(request, "from_seq", minimum=1)
         to_seq = _as_int_param(request, "to_seq", minimum=1)
         over = _as_int_param(request, "over", minimum=1)
         limit = _as_int_param(request, "limit", minimum=1)
         page_size = min(limit or _DELIVERY_DEFAULT_LIMIT, _DELIVERY_MAX_LIMIT)
 
-        qs = (
-            deliveries_queryset(
-                match,
-                innings,
-                from_seq=from_seq,
-                to_seq=to_seq,
-                over=over,
+        with consistent_snapshot():
+            match = get_match(pk)
+            innings = get_innings(match, innings_number)
+
+            qs = (
+                deliveries_queryset(
+                    match,
+                    innings,
+                    from_seq=from_seq,
+                    to_seq=to_seq,
+                    over=over,
+                )
+                .select_related(
+                    "bowler",
+                    "batter",
+                    "non_striker",
+                    "dismissed_player",
+                    "retired_player",
+                    "fielder1",
+                    "fielder2",
+                    "fielder3",
+                )
+                .order_by("delivery_seq")
             )
-            .select_related(
-                "bowler",
-                "batter",
-                "non_striker",
-                "dismissed_player",
-                "retired_player",
-                "fielder1",
-                "fielder2",
-                "fielder3",
-            )
-            .order_by("delivery_seq")
-        )
 
-        cursor = request.query_params.get("cursor")
-        if cursor:
-            qs = qs.filter(delivery_seq__gt=_decode_delivery_cursor(cursor))
+            cursor = request.query_params.get("cursor")
+            if cursor:
+                qs = qs.filter(delivery_seq__gt=_decode_delivery_cursor(cursor))
 
-        rows = list(qs[: page_size + 1])
-        has_more = len(rows) > page_size
-        if has_more:
-            rows = rows[:page_size]
-            next_cursor = _encode_delivery_cursor(rows[-1].delivery_seq)
-        else:
-            next_cursor = None
+            rows = list(qs[: page_size + 1])
+            has_more = len(rows) > page_size
+            if has_more:
+                rows = rows[:page_size]
+                next_cursor = _encode_delivery_cursor(rows[-1].delivery_seq)
+            else:
+                next_cursor = None
+            seq = current_event_seq(match.id)
 
-        self.cache_max_age, self.cache_swr = _cache_ttl(match)
+        self._match = match
+        self._event_seq = seq
         return Response(
             {
                 "data": [_delivery_payload(row) for row in rows],
@@ -190,6 +246,7 @@ class DeliveriesView(CacheControlMixin, APIView):
                     "next_cursor": next_cursor,
                     "ball_data": True,
                     "commentary": False,
+                    "event_seq": seq,
                 },
             }
         )

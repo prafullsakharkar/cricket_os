@@ -9,6 +9,7 @@ from uuid import UUID
 
 from django.db import IntegrityError, transaction
 
+from apps.core.events import TOPIC_VENUE_UPDATED, publish
 from apps.core.uuid7 import uuid7
 from apps.players.identity_scoring import normalize_name
 from apps.providers.models import DataProvider, ProviderEntityMap
@@ -68,6 +69,7 @@ def upsert_venue(
             venue = Venue.objects.select_for_update().get(pk=map_row.internal_id)
             _apply(venue, fields)
             venue.save()
+            publish(TOPIC_VENUE_UPDATED, {"venue_id": str(venue.pk)})
             return venue
 
         try:
@@ -97,6 +99,7 @@ def upsert_venue(
             venue = Venue.objects.get(pk=map_row.internal_id)
             _apply(venue, fields)
             venue.save()
+        publish(TOPIC_VENUE_UPDATED, {"venue_id": str(venue.pk)})
         return venue
 
 

@@ -9,7 +9,7 @@ from uuid import UUID
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.core.events import TOPIC_PROVIDER_MAP_VERIFIED, publish
+from apps.core.events import TOPIC_PLAYER_UPDATED, TOPIC_PROVIDER_MAP_VERIFIED, publish
 from apps.players.models import Player
 from apps.providers.models import DataProvider, ProviderEntityMap
 from apps.providers.services import is_pem_race
@@ -81,6 +81,7 @@ def upsert_player(
             player = Player.objects.select_for_update().get(pk=map_row.internal_id)
             _apply(player, fields)
             player.save()
+            publish(TOPIC_PLAYER_UPDATED, {"player_id": str(player.pk)})
             return player
 
         try:
@@ -109,6 +110,7 @@ def upsert_player(
             player = Player.objects.get(pk=map_row.internal_id)
             _apply(player, fields)
             player.save()
+        publish(TOPIC_PLAYER_UPDATED, {"player_id": str(player.pk)})
         return player
 
 
@@ -117,6 +119,7 @@ def mark_inactive(player: Player) -> Player:
     player.is_active = False
     player.deleted_at = timezone.now()
     player.save(update_fields=["is_active", "deleted_at"])
+    publish(TOPIC_PLAYER_UPDATED, {"player_id": str(player.pk)})
     return player
 
 

@@ -38,3 +38,17 @@ class CoreConfig(AppConfig):
             ensure_cricket_schema,
             dispatch_uid="apps.core.ensure_cricket_schema",
         )
+        # Phase E: map domain events to cache namespaces. Imported lazily so
+        # core stays importable without Django settings (pure scoring suite).
+        if getattr(self, "_cache_ready_done", False):
+            return
+        from django.conf import settings
+
+        from apps.core.cache import invalidation, purger
+
+        invalidation.register_defaults()
+        cdn_url = getattr(settings, "CACHE_PURGE_URL", "")
+        invalidation.configure_purger(
+            purger.HttpCachePurger(cdn_url) if cdn_url else purger.NoopCachePurger()
+        )
+        self._cache_ready_done = True

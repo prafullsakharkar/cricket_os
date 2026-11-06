@@ -11,6 +11,11 @@ from django.db import IntegrityError, transaction
 
 from apps.competitions.models import Competition, Series
 from apps.core.enums import CompetitionType
+from apps.core.events import (
+    TOPIC_COMPETITION_UPDATED,
+    TOPIC_SERIES_UPDATED,
+    publish,
+)
 from apps.core.uuid7 import uuid7
 from apps.players.identity_scoring import normalize_name
 from apps.providers.models import DataProvider, ProviderEntityMap
@@ -66,6 +71,7 @@ def upsert_competition(
             competition = Competition.objects.select_for_update().get(pk=map_row.internal_id)
             _apply(competition, fields)
             competition.save()
+            publish(TOPIC_COMPETITION_UPDATED, {"competition_id": str(competition.pk)})
             return competition
 
         try:
@@ -94,6 +100,7 @@ def upsert_competition(
             competition = Competition.objects.get(pk=map_row.internal_id)
             _apply(competition, fields)
             competition.save()
+        publish(TOPIC_COMPETITION_UPDATED, {"competition_id": str(competition.pk)})
         return competition
 
 
@@ -140,6 +147,7 @@ def upsert_series(
             for name_, value in fields.items():
                 setattr(series, name_, value)
             series.save()
+            publish(TOPIC_SERIES_UPDATED, {"series_id": str(series.pk)})
             return series
 
         try:
@@ -169,6 +177,7 @@ def upsert_series(
             for name_, value in fields.items():
                 setattr(series, name_, value)
             series.save()
+        publish(TOPIC_SERIES_UPDATED, {"series_id": str(series.pk)})
         return series
 
 

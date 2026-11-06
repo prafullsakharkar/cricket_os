@@ -153,6 +153,9 @@ jobs:
             tests/players/test_identity_scoring_properties.py \
             tests/players/test_merge.py \
             --cov-config=.coveragerc-identity --cov --cov-report=term-missing
+      - name: Phase E load smoke (cached-read p95 <= 200ms, fan-out <= 1s)
+        run: |
+          uv run python loadtests/smoke_gate.py
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

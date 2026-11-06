@@ -20,17 +20,20 @@ standard envelope and cache headers.
 from __future__ import annotations
 
 import datetime
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
 
+from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.enums import MatchStatus
 from apps.core.errors import NotFound
 from apps.deliveries.models import Delivery
 from apps.innings.models import Innings, InningsEvent, InningsSummary
-from apps.matches.models import Match, MatchResult, MatchTeam, Toss
+from apps.matches.models import Match, MatchEventLog, MatchResult, MatchTeam, Toss
 from apps.players.models import Player
 from apps.providers.licensing import attribution_for, license_meta
 from apps.providers.models import DataProvider
@@ -71,6 +74,32 @@ def get_match(pk: str) -> Match:
         return Match.objects.select_related("venue").get(pk=pk)
     except Match.DoesNotExist as exc:
         raise NotFound(f"Match {pk} not found") from exc
+
+
+@contextmanager
+def consistent_snapshot() -> Iterator[None]:
+    """Read the payload and ``MAX(seq)`` in one consistent snapshot.
+
+    Outside an outer transaction we open a short ``REPEATABLE READ``
+    transaction so the data and the sequence can never disagree. Inside an
+    outer transaction (tests, the ingestion path) the outer isolation is
+    inherited and callers must read the sequence *first* (at-least-as-new): a
+    snapshot that includes an event it cannot yet report is a safe duplicate
+    for the subscriber (ignored by ``seq > last_seq``), never a gap.
+    """
+    connection = transaction.get_connection()
+    if connection.in_atomic_block:
+        yield
+        return
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        yield
+
+
+def current_event_seq(match_id: Any) -> int:
+    """The highest event-log ``seq`` reflected by a snapshot of ``match_id``."""
+    return MatchEventLog.objects.filter(match_id=match_id).aggregate(last=Max("seq"))["last"] or 0
 
 
 def _match_date(match: Match) -> datetime.date:

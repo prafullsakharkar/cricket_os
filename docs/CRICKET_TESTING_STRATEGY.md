@@ -13,8 +13,8 @@ scoring engine is pure and is the primary target of fast unit testing.
 | Unit | Pure rules, serializers, utilities | `pytest`, `hypothesis` (property-based) | ~60% |
 | Integration | Models, services, DB constraints, rebuild pipeline | `pytest-django`, `factory_boy`, disposable Postgres | ~25% |
 | Contract | Provider adapters, API responses | `schemathesis`, `jsonschema`, recorded fixtures | ~8% |
-| E2E | Match lifecycle, realtime, frontend-facing flows | `pytest` + `channels.testing` + `httpx`/Playwright | ~5% |
-| Performance | Hot queries, load, realtime | `pytest-benchmark`, `k6` | separate |
+| E2E | Match lifecycle, realtime, frontend-facing flows | `pytest` (hand-rolled ASGI communicators driving `config.asgi.application` — `channels.testing`/daphne are not installed) | ~5% |
+| Performance | Hot queries, load, realtime | Python in-process smoke gate (CI, `make test-loadtest-smoke`) + standalone benchmark scripts (`scripts/`, `loadtests/`) | separate |
 | Migration | Forward/backward migrations at scale | `pytest` + prod-like fixtures | CI gate |
 
 **Determinism:** freeze time; generate UUIDv7 with a seeded clock; use
@@ -168,22 +168,45 @@ def test_match_completed_invalidates_series_points_table(redis, db):
 
 ## 11. Realtime delivery tests
 
-- Using `channels.testing.WebsocketCommunicator` (driven by the **ReplayAdapter**
-  replaying a recorded match through the live pipeline): subscribe to
-  `match:{id}`; append a delivery; assert the client receives exactly one
-  `delivery.appended` with a monotonic **per-match** `seq` (from
-  `match_event_log`).
-- **Reconnect/replay:** drop and reconnect with `last_seq`; assert the server
-  replays the retained `match_event_log` rows with no gap and no duplicate.
-- **`resync_required`:** with a `last_seq` older than the retained window (or the
-  log purged after completion), assert the server returns `resync_required`.
-- **Coalescing:** rapid deliveries produce ≤1 update/s/client.
-- **SSE parity:** the SSE stream yields the same event sequence.
+Implemented in `tests/phase_e/` (no pytest-asyncio — coroutines run through
+`asyncio.run`; no `channels.testing` — a minimal `_AsgiCommunicator` /
+`_WebsocketCommunicator` drives `config.asgi.application` directly):
+
+- **Hub semantics** (`test_realtime_hub.py`): coalescing (rapid deliveries →
+  ≤1 `batch` frame per client per tick), immediate correction/terminal flush,
+  backpressure (bounded queue → drop + metric, replay-on-reconnect recovers),
+  gap/backfill via `events_since`, licensing degradation, drain (flush, notice,
+  jittered close).
+- **SSE** (`test_realtime_transport.py`): frame encoding/headers, heartbeat,
+  `Last-Event-ID`/`from_seq` resumption, Origin 403/same-origin/allowlist,
+  connection caps 429 + spoofed-`X-Forwarded-For`, disconnect cleanup, and an
+  end-to-end ASGI test through `config.asgi.application`.
+- **WS** (`test_realtime_websocket.py`): accept/live frames/batch, `from_seq`
+  replay, `resync_required`, Origin 4403, caps 4429, ping/pong, message limits
+  (4409/4400), drain → `server.draining` + close 1001, pump-failure cleanup, and
+  **SSE↔WS parity** (identical frame JSON on both transports for the same hub).
+- **Exactly-once snapshot handoff** (`test_snapshot_stream.py`): REST
+  `meta.event_seq` → subscribe delivers exactly the events after the snapshot.
+- **Reference client** (`test_reference_client.py`): pure codec/parser tests
+  (SSE block parsing, frame validation, RFC 6455 frame codec incl. the §1.3
+  handshake vector) with no sockets; network paths are exercised by hand
+  (`tools/reference_client/README.md`).
+- **Composition root** (`test_realtime_wiring.py`): the ASGI lifespan builds the
+  components and runs/stops the broker; wiring defaults raise when unconfigured.
 
 ## 12. Performance tests
 
-- Hot-query benchmark suite with regression thresholds (see performance doc §12).
-- `k6` scenarios: read soak, marquee spike, deliveries feed, ingestion throughput.
+- **CI gate (`make test-loadtest-smoke`):** the Phase E smoke gate
+  (`loadtests/smoke_gate.py`) enforces acceptance #10 in-process — warm cached
+  `GET /api/v1/matches/live` p95 ≤ 200 ms (100 reads through
+  `django.test.Client()`) and realtime fan-out ≤ 1 s (100 subscribers, 1000-frame
+  burst, real coalesce ticker).
+- **Standalone benchmark scripts** (`scripts/`): ingestion throughput, live-path
+  latency, event-log round-trip — report-only, not in CI.
+- **Manual k6 scenarios** (`loadtests/k6/`): `cache_reads.js` (warm-read soak,
+  p95 < 200 ms threshold) and `sse_fanout.js` (50 concurrent streams, first frame
+  ≤ 1 s via the WS twin — vanilla k6 cannot stream SSE). k6 is not installed in
+  CI; these target a deployed node.
 - CI gate on `EXPLAIN` plans for the top-10 queries.
 
 ## 13. Migration tests

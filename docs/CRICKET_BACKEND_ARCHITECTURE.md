@@ -33,7 +33,7 @@ the module primarily owns (§4).
 
 | Module | Responsibility | Owns (domain models) | Services / selectors | Publishes | Depends on |
 |---|---|---|---|---|---|
-| `core` | Base models, enums, UUIDv7, config, logging, pagination, error envelope, time utils | `TimeStampedModel`, enums | mixins, `RuleConfig` registry | — | — |
+| `core` | Base models, enums, UUIDv7, config, logging, pagination, error envelope, time utils, **cache layer** (key-versioned read-through), **streaming protocols**, **throttling + connection limiter**, **metrics** | `TimeStampedModel`, enums | mixins, `RuleConfig` registry, `cache` (store/keys/policy/invalidation/purger), `streaming` (protocols), `throttling`, `metrics` | — | — |
 | `teams` | Teams, memberships, squads | `Team`, `TeamMembership`, `Squad`, `SquadMember` | `team_service`, `squad_service`; `team_selector` | `team.updated` | `core`, `venues` |
 | `players` | Player identity, profiles, registry mapping, merges, duplicate review | `Player`, `PlayerMerge`, `PlayerDuplicateCandidate` | `player_service`, `identity_resolution`; `player_selector` | `player.updated`, `player.merged` | `core`, `teams` |
 | `venues` | Venues, grounds, countries, governing bodies | `Venue`, `Ground`, `Country`, `GoverningBody` | `venue_service` | `venue.updated` | `core` |
@@ -50,7 +50,7 @@ the module primarily owns (§4).
 | `synchronization` | Checkpoints, reconciliation, corrections, fixture sync | `SyncCheckpoint`, `ReconciliationJob`, `DataCorrection` | `sync_service`, `reconcile_service`, `fixtures.sync_fixtures` | `correction.applied` | `providers`, `ingestion` |
 | `live` | Live ingestion surface: polling, push receiver, breaker, fixture window orchestration | (no models — writes through `matches`/`deliveries`) | `apply_batch`, `polling`, `receiver`, `breaker`, `verify` | `delivery.appended`, `delivery.corrected`, `match.state_changed` | `core`, `matches`, `deliveries`, `synchronization`, `providers`, `ingestion` (DLQ reporters) |
 | `search` | Cross-entity search & filtering | (no models; index tables/projections) | `search_service` | — | `teams`, `players`, `competitions`, `matches` |
-| `realtime` | WebSocket/SSE fan-out, subscriptions (consumes the `MatchEventLog` stream produced by Phase D) | `Subscription` (ephemeral) | consumers, `fanout_service` | domain events → client | `core`, `matches` (event log) |
+| `realtime` | WebSocket/SSE fan-out, subscriptions; consumes the `MatchEventLog` stream produced by Phase D through `core` protocols (hub, broker, frames, security, wiring) | `Subscription` (ephemeral) | `hub` (coalescing/backpressure/gap-recovery/drain), `broker` (Redis pub/sub + degraded polling), `sse`, `consumers`, `security` (Origin/caps), `routing` | domain events → client | `core` only (reader/policy injected by the composition root, `config/asgi.py`) |
 | `scoring` | Pure cricket rule engine (see Phase 5) | (pure functions; no models) | `engine`, `laws`, `standings`, `results`, `dls` | — | `core` |
 | `administration` | Admin, audit, ops dashboards | `AuditLog` | `admin_service` | `audit.recorded` | `core` |
 
@@ -131,7 +131,7 @@ cricket_os/
   config/
     settings/{base,dev,prod,test}.py
     urls.py
-    asgi.py            # Channels routing
+    asgi.py            # composition root: HTTP + WebSocket + lifespan (realtime wiring)
     celery.py
   apps/
     core/
@@ -140,6 +140,10 @@ cricket_os/
       errors.py        # error envelope
       logging.py
       uuid7.py
+      cache/           # read-through cache: store, keys, policy, invalidation, purger
+      streaming.py     # realtime protocols (EventLogReader, StreamInfo, MatchPolicy)
+      throttling.py    # token buckets (fail-open) + connection limiter
+      metrics.py       # in-process metrics facade
     players/
       models.py
       selectors/players.py
@@ -167,9 +171,14 @@ cricket_os/
       normalizers.py
       tasks.py
     realtime/
-      consumers.py
-      sse.py
-      routing.py
+      hub.py           # fan-out: coalescing, backpressure, gap/backfill, drain
+      broker.py        # Redis pub/sub → hub, degraded polling, recovery
+      frames.py        # frame model + codec
+      security.py      # shared Origin/caps/resume policy (SSE + WS)
+      sse.py           # SSE transport
+      consumers.py     # WebSocket transport
+      routing.py       # websocket_urlpatterns
+      wiring.py        # composition hooks (injected, never imported)
   tests/
     conftest.py
     factories/

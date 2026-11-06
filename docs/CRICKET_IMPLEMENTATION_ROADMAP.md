@@ -388,30 +388,70 @@ ReplayAdapter until a licence exists).
 
 ---
 
-## Phase E — Frontend APIs & real-time updates
+## Phase E — Frontend APIs & real-time updates — **implemented**
 
 **Goal:** cached live-score/scorecard APIs with WebSocket/SSE delivery,
 reconnection and recovery (event publication and the per-match `seq` already
 exist from Phase D).
 
-- **Tasks**
-  1. Redis caching layer + key-versioning invalidation.
-  2. CDN/`Cache-Control`/`ETag` polish, including **state-dependent** caching
-     (live vs. completed vs. post-reconciliation-window `immutable`); cursor
-     pagination everywhere.
-  3. `realtime` module **consumers**: WS consumers + SSE; consume the
-     `match_event_log` stream produced in Phase D; replay serving for `last_seq`;
-     the `resync_required` path.
-  4. Frontend integration contract (event types, coalescing).
-  5. Throttling/rate limits on hot endpoints.
-- **Tables/modules:** `realtime` (consumers), `core (pagination)`, all read selectors.
-- **Endpoints:** WS/SSE `/ws|/sse/matches/{id}`; all Phase C/D reads cached.
-- **Tests:** realtime delivery, reconnect/replay + `resync_required`, coalescing,
-  cache invalidation, state-dependent cache headers, load test (read soak + spike).
-- **Acceptance:** p95 live read ≤ 200 ms cached; realtime event ≤ 1 s; no gaps on
-  reconnect; `resync_required` on a stale `last_seq`.
-- **Risks:** fan-out cost on marquee matches (mitigated by SSE/coalescing/CDN). **Effort:** 25.
-- **DoD:** live scorecard updates in a browser via WS and via SSE fallback.
+**Delivered (branch `phase-e`):**
+
+1. **Redis roles + cache layer** — role-separated Redis databases (cache 0,
+   pubsub 3, ratelimit 4, Celery 1/2) with role-appropriate eviction policies;
+   key-versioned read-through cache (`apps/core/cache`): namespaces, TTL policy,
+   entry store, single-flight, local circuit breaker (fail-open), invalidation
+   registry, CDN surrogate-key purge hook, metrics.
+2. **HTTP/CDN polish** — state-dependent `Cache-Control` (live `max-age=5,
+   swr=5`; completed `max-age=300, s-maxage=3600, stale-while-revalidate=600,
+   stale-if-error=86400`; `immutable` past the 24 h reconciliation window);
+   strong `ETag`; `Surrogate-Key` header; trusted-proxy client IP
+   (`TRUSTED_PROXY_HOPS`); cursor pagination everywhere.
+3. **`meta.event_seq`** — every match-scoped REST payload carries the highest
+   committed log sequence, captured with a REPEATABLE READ snapshot; the REST →
+   realtime subscribe handoff is **exactly-once**.
+4. **Realtime core** (`apps/realtime`) — `core.streaming` protocols; hub
+   (coalescing ≤1 Hz, immediate correction/terminal flush, bounded queues +
+   backpressure drops, gap/backfill via `events_since`, licensing degradation,
+   drain with jitter); Redis pub/sub broker with **degraded polling** and
+   automatic recovery. `apps/realtime` imports only `core`; the composition root
+   (`config/asgi.py` lifespan) injects the `apps/matches` reader/policy and runs
+   the broker.
+5. **Transports** — SSE (`GET /api/v1/sse/matches/{id}/`, `Last-Event-ID`/
+   `from_seq` resume, heartbeats) and WS (`WS /api/v1/ws/matches/{id}/`, ping/
+   pong, message limits, close codes 4403/4429/4400/4409/1001/1011) over the
+   same hub with byte-identical frames (parity contract).
+6. **Policy** — shared Origin allowlist + connection caps (per-IP 8, per-match
+   2000, per-node 10000, fail-open) checked before subscription; token-bucket
+   throttling (fail-open) with a stricter `deliveries` scope.
+7. **Frontend contract + reference client** — `docs/FRONTEND_CONTRACT.md`
+   (frames, recovery, close codes, parity) and a dependency-free reference
+   client (`tools/reference_client/`, stdlib SSE + minimal RFC 6455 WS).
+8. **Observability** — realtime/cache metrics, `ops/alerts/realtime_alerts.yml`
+   (9 rules, contract-tested against the metric registry + runbooks),
+   `docs/RUNBOOKS.md` realtime/cache sections.
+9. **Load tests** — `make test-loadtest-smoke` (CI): cached-read p95 ≤ 200 ms,
+   fan-out ≤ 1 s; manual k6 scripts in `loadtests/k6/`.
+
+**Acceptance evidence:** `make check` + `make test-loadtest-smoke` (cached-read
+p95 ≈ 0.6 ms, fan-out burst ≈ 0.21 s / immediate ≈ 0.4 ms — budgets 200 ms /
+1 s); `tests/phase_e/test_snapshot_stream.py` proves the exactly-once REST →
+subscribe rule; `test_realtime_*.py` prove reconnect/replay, `resync_required`,
+coalescing, slow-consumer drops, gap backfill, degraded/recovery, and drain.
+
+**Decisions and deferrals (recorded in the Phase E ledger):** career/team
+aggregates, standings and rankings stay in **Phase F**; replicas/autoscaling,
+channel-layer fan-out across nodes and `AddIndexConcurrently` production
+migration stay in **Phase G**. Out of scope for E: JWT/user accounts, push
+notifications, real CDN network integration (the purge hook is wired and
+no-ops when `CACHE_PURGE_URL` is empty), and any network access in code/tests.
+The `realtime` module owns no tables — `match_event_log` lives in `matches`
+(DATABASE_SCHEMA wins) and is consumed through `core` protocols (ARCHITECTURE
+wins on boundaries).
+
+- **Risks:** fan-out cost on marquee matches (mitigated by SSE/coalescing/CDN).
+  **Effort:** 25.
+- **DoD:** live scorecard updates in a browser via WS and via SSE fallback —
+  met by the reference client + FRONTEND_CONTRACT.
 
 ---
 

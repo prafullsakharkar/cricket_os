@@ -28,7 +28,8 @@ from typing import Any
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.http import CacheControlMixin
+from apps.core.cache.policy import for_fixtures, for_live
+from apps.core.cache_views import CachedReadMixin
 from apps.core.pagination import CursorPagination
 from apps.live.services.breaker import is_open_for
 from apps.matches.selectors.reads import (
@@ -39,14 +40,14 @@ from apps.matches.selectors.reads import (
 )
 from apps.providers.models import DataProvider
 
-_LIVE_MAX_AGE = 5
-_LIVE_SWR = 5
-_LIST_MAX_AGE = 30
-_LIST_SWR = 60
 
+class _MatchListMixin(CachedReadMixin, APIView):
+    """Cursor-paginated match feed; subclasses pick the selector + ordering.
 
-class _MatchListMixin(CacheControlMixin, APIView):
-    """Cursor-paginated match feed; subclasses pick the selector + ordering."""
+    Each feed is cached under its own version namespace
+    (``matches:live|upcoming|recent``) so a state-change event bumps exactly
+    the buckets it affects.
+    """
 
     selector: Callable[..., Any]
     ordering: Sequence[str] = ("-start_time_utc",)
@@ -96,8 +97,10 @@ class LiveMatchListView(_MatchListMixin):
 
     selector = list_live_matches
     ordering = ("-start_time_utc",)
-    cache_max_age = _LIVE_MAX_AGE
-    cache_swr = _LIVE_SWR
+    cache_namespace = "matches:live"
+
+    def cache_plan(self) -> Any:
+        return for_live()
 
 
 class UpcomingMatchListView(_MatchListMixin):
@@ -105,8 +108,10 @@ class UpcomingMatchListView(_MatchListMixin):
 
     selector = list_upcoming_matches
     ordering = ("start_time_utc",)
-    cache_max_age = _LIST_MAX_AGE
-    cache_swr = _LIST_SWR
+    cache_namespace = "matches:upcoming"
+
+    def cache_plan(self) -> Any:
+        return for_fixtures()
 
 
 class RecentMatchListView(_MatchListMixin):
@@ -114,8 +119,10 @@ class RecentMatchListView(_MatchListMixin):
 
     selector = list_recent_matches
     ordering = ("-end_time_utc",)
-    cache_max_age = _LIST_MAX_AGE
-    cache_swr = _LIST_SWR
+    cache_namespace = "matches:recent"
+
+    def cache_plan(self) -> Any:
+        return for_fixtures()
 
 
 __all__ = [

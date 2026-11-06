@@ -198,7 +198,7 @@ def test_redis_down_does_not_fail_ingestion(make_match, monkeypatch) -> None:
     def boom() -> None:
         raise ConnectionError("redis down")
 
-    monkeypatch.setattr(pub, "get_redis_connection", boom)
+    monkeypatch.setattr(pub, "client", boom)
     # Publication is guarded, never raises.
     assert pub.publish_match_event(match.id, {"event_type": "x"}) is False
     row = event_log.append_event(

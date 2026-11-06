@@ -39,3 +39,6 @@ def test_middleware_logs_structured_request_fields(caplog: pytest.LogCaptureFixt
     assert record.method == "GET"
     assert isinstance(record.status, int)
     assert record.duration_ms >= 0
+    # The trusted-proxy client IP is logged (SECURITY §2); the test client is
+    # a direct peer so it is the REMOTE_ADDR.
+    assert getattr(record, "client_ip", None) == "127.0.0.1"

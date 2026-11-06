@@ -85,6 +85,7 @@ source = [
   "apps/ingestion",
   "apps/synchronization",
   "apps/live",
+  "apps/realtime",
 ]
 branch = true
 
@@ -117,6 +118,10 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 "apps/**/models.py" = ["DJ001", "RUF012"]
 # CI helper script (pre-existing) prints DDL to stdout by design.
 "scripts/**" = ["T201"]
+# The standalone reference client is a CLI tool that prints by design.
+"tools/**" = ["T201"]
+# The load smoke gate is a CLI report tool that prints by design.
+"loadtests/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]
@@ -226,6 +231,32 @@ forbidden_modules = [
   "apps.realtime",
   "apps.administration",
   "apps.search",
+]
+
+# Phase E (ledger conflict 1): realtime depends only on core. The durable log
+# and licensing policy are injected through apps.realtime.wiring by the
+# composition root, so no realtime module may import any other first-party app.
+[[tool.importlinter.contracts]]
+name = "realtime depends only on core"
+type = "forbidden"
+source_modules = ["apps.realtime"]
+forbidden_modules = [
+  "apps.venues",
+  "apps.teams",
+  "apps.players",
+  "apps.competitions",
+  "apps.providers",
+  "apps.matches",
+  "apps.innings",
+  "apps.deliveries",
+  "apps.scorecards",
+  "apps.statistics",
+  "apps.ingestion",
+  "apps.synchronization",
+  "apps.live",
+  "apps.administration",
+  "apps.search",
+  "apps.scoring",
 ]
 
 [[tool.importlinter.contracts]]

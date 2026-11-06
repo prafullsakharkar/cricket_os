@@ -104,8 +104,8 @@ Provider API / push feed
     innings events — + idempotency key)
   → PostgreSQL persistence (transactional, upsert-by-revision; is_current flag)
   → Tier 1 rebuild (per delivery): innings_summary → cards → FOW/partnership/over
-  → Redis cache invalidation (targeted match keys)
-  → Real-time event publication (match_event_log + Redis pub/sub → WS/SSE)
+  → Redis cache invalidation (targeted match keys / version namespaces)
+  → Real-time event publication (match_event_log append + Redis pub/sub match:{id} → node broker → hub → WS/SSE, Phase E)
   → Frontend update
   ... and, off the live path (not per delivery):
   → Tier 2 rebuild on match.completed / correction.applied / scheduled jobs:
@@ -115,6 +115,14 @@ Provider API / push feed
 Tier 1 runs on every append/correction and keeps the live scorecard fresh; Tier 2
 never runs on a single delivery (see
 [CRICKET_SCORING_RULES.md §6](CRICKET_SCORING_RULES.md)).
+
+The realtime hop (Phase E) is best-effort: each web node's broker
+pattern-subscribes to `match:*` and feeds the shared hub (coalescing ≤1 Hz,
+bounded queues, gap/backfill from the log, licensing filter). If Redis pub/sub
+fails the broker degrades to polling the durable `match_event_log`
+(`realtime_degraded`) and recovers automatically — the log is the source of
+truth, so no event is permanently lost. See
+[REALTIME_AND_CACHING.md](REALTIME_AND_CACHING.md).
 
 ### 3.1 Sequence diagram (Mermaid)
 
