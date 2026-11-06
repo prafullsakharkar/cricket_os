@@ -558,6 +558,11 @@ A `recompute(scope)` function can rebuild any subtree (Tier 1 or Tier 2) for
 corrections or historical imports. Because a live delivery only touches Tier 1,
 career and team tables are never rewritten ball-by-ball.
 
+**Phase F implementation.** The Tier-2 pipeline is implemented in
+`apps/statistics/services/recompute.py` (key scheme, dependency sets,
+recompute-from-source + digest gates, watermark, sweep) — see
+`docs/STATISTICS_PIPELINE.md` for the full walkthrough.
+
 ---
 
 ## 7. Decisions (recorded during the A+ implementation)

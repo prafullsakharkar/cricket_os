@@ -124,6 +124,18 @@ counter that is part of the cache key) to avoid wildcard deletes.
   invalidation and the realtime event) — it does **not** touch career/team tables.
   **Tier 2** (career/team/standings/leaderboard/H2H/form/fantasy) runs on
   `match.completed`, `correction.applied` and scheduled jobs, never per delivery.
+- **Phase F serving model (implemented).** The statistics/analytics endpoints
+  read **digest-validated Tier-2 rows only** — never the partitioned `delivery`
+  table — so an uncached leaderboard/points-table/player-stats read is a small
+  indexed query over a few aggregate rows, not an aggregation over millions of
+  deliveries. Recompute is **recompute-from-source with digest gates**: a
+  recompute whose inputs digest is unchanged skips the write, so the steady
+  state is read-only. The `statistics_watermark` checkpoint + sweep bound the
+  correction backlog, stamped on `statistics_watermark_lag` (alert:
+  `StatisticsWatermarkLagHigh`). See [STATISTICS_PIPELINE.md](STATISTICS_PIPELINE.md).
+- **Search budget.** Cross-entity search runs inside `SET LOCAL
+  statement_timeout` (default 200 ms) so one pathological `q` cannot stall the
+  pool; candidates are capped per type. See [SEARCH.md](SEARCH.md).
 
 ---
 

@@ -132,8 +132,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 6 Search | done | 1589333 |
 | 7 Read API | done | c4ed373 |
 | 8 Endpoint coverage audit | done | e1a08d2 |
-| 9 Observability | done | — |
-| 10 Docs | — | — |
+| 9 Observability | done | 9046dad |
+| 10 Docs | done | — |
 
 ## Notes / risks
 
@@ -315,3 +315,20 @@ behaviour, ARCHITECTURE wins on module boundaries.
     tests close the recompute/reads gaps (SEASON/VENUE scopes, empty-scope
     deletes, H2H TIE/DRAW/NO_RESULT/high-win, reconciliation diffs, event
     guards, merge re-point of distinct matches).
+- **Group 10 rulings (docs):**
+  - New `docs/STATISTICS_PIPELINE.md` (key scheme, dependency order, digest
+    gates, watermark/sweep, standings+NRR+reconciliation, leaderboards/records/
+    form/compare, merge integration, serving, operations) and
+    `docs/SEARCH.md` (index-backed matching, weighted ranking, safety layers,
+    API shape, observability).
+  - Roadmap: Phase F marked DONE (10 groups, `5075536`…`9046dad`), delivered
+    surface + decisions/deferrals, effort deviation 35 → 43.
+  - Cross-doc updates: API_SPEC implementation note (stale "search remains
+    Phase D" fixed → points at ENDPOINT_COVERAGE.md); ARCHITECTURE `search`
+    module row + `statistics`/`rankings` rows refreshed; PERFORMANCE Phase F
+    serving model (digest-validated rows, never `delivery`) + search timeout
+    budget; SCORING_RULES Tier-2 pointer; DOMAIN_MODEL §4.9 `StatisticsWatermark`;
+    TESTING_STRATEGY Phase F gates (coverage, oracle, no-network, EXPLAIN,
+    alert contract, query guards); README index rows 18–20 + changelog entry.
+  - DATABASE_SCHEMA already carried the Phase F additions (rule_version/
+    inputs_digest/source_kind/watermark); untouched — the drift gate stays green.

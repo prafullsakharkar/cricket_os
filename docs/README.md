@@ -33,6 +33,9 @@ testing, a phased roadmap, and a risk register.
 | 15 | [RUNBOOKS.md](RUNBOOKS.md) | Runbooks for every live-ingestion **and realtime/cache** alert (provider outage, DLQ, correctness, realtime gap, degraded, backpressure, caps, cache breaker) |
 | 16 | [FRONTEND_CONTRACT.md](FRONTEND_CONTRACT.md) | Phase E wire contract: frames, transports, recovery/close codes, Origin + caps, client checklist |
 | 17 | [REALTIME_AND_CACHING.md](REALTIME_AND_CACHING.md) | Phase E architecture: Redis roles, cache layer, realtime pipeline, throttling, observability, settings |
+| 18 | [STATISTICS_PIPELINE.md](STATISTICS_PIPELINE.md) | Phase F Tier-2 aggregate pipeline: key scheme, digest gates, watermark/sweep, standings+NRR, reconciliation, serving |
+| 19 | [SEARCH.md](SEARCH.md) | Phase F cross-entity search: trigram matching, weighted ranking, safety, API shape |
+| 20 | [ENDPOINT_COVERAGE.md](ENDPOINT_COVERAGE.md) | Phase F audit of the API endpoint matrix: implemented / partial / deferred with rationale |
 
 ## Ground rules used throughout
 
@@ -60,6 +63,29 @@ testing, a phased roadmap, and a risk register.
   [CRICKET_IMPLEMENTATION_ROADMAP.md](CRICKET_IMPLEMENTATION_ROADMAP.md).
 
 ## Revision history
+
+### 2026-11-06 — Phase F (statistics & analytics) implemented
+
+- **New `STATISTICS_PIPELINE.md`** — the Tier-2 aggregate pipeline: key scheme,
+  dependency sets, recompute-from-source + digest gates, watermark/sweep,
+  standings+NRR + reconciliation, leaderboards/records/form/compare, merge
+  integration, serving, operations.
+- **New `SEARCH.md`** — cross-entity trigram search: index-backed matching,
+  weighted ranking, safety layers (bounds, statement timeout, caps), API shape,
+  observability.
+- **New `ENDPOINT_COVERAGE.md`** — full audit of the API spec matrix: 32/39
+  read endpoints implemented, 4 deferred with rationale, 3 fantasy rows out of
+  scope.
+- **CRICKET_IMPLEMENTATION_ROADMAP.md** — Phase F marked done (10 groups,
+  commits `5075536`…`9046dad`), decisions/deferrals recorded, effort 35→43.
+- **CRICKET_API_SPECIFICATION.md / CRICKET_BACKEND_ARCHITECTURE.md /
+  CRICKET_PERFORMANCE_AND_SCALING.md / CRICKET_SCORING_RULES.md /
+  CRICKET_DOMAIN_MODEL.md / CRICKET_TESTING_STRATEGY.md** — Phase F surface
+  reflected (endpoint implementation note, `search` module row, digest-validated
+  serving model + search timeout budget, Tier-2 pipeline pointer,
+  `StatisticsWatermark`, Phase F test gates).
+- **`ops/alerts/statistics_alerts.yml` + `docs/RUNBOOKS.md`** — 6 rules and
+  Statistics pipeline / Search / Rankings runbook sections.
 
 ### 2026-11-05 — Phase E (frontend APIs & real-time) implemented
 
