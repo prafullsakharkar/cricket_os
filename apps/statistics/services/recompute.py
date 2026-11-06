@@ -145,6 +145,8 @@ def dependency_keys_for_match(match: Match) -> set[str]:
             keys.add(f"form:{row.player_id}:{fmt}")
             keys.add(f"form:{row.player_id}:-")
     if match.series_id:
+        keys.add(f"leaderboard:player:SERIES:{match.series_id}:-")
+        keys.add(f"leaderboard:player:SERIES:{match.series_id}:{fmt}")
         keys.add(f"standings:{match.series_id}:{match.stage_id or '-'}")
     return keys
 
@@ -794,8 +796,9 @@ def _recompute_leaderboard_key(parts: list[str]) -> None:
     from apps.statistics.services import leaderboard as lb
 
     scope = parts[2]
+    ref = None if parts[3] == "-" else UUID(parts[3])
     fmt = None if parts[4] == "-" else parts[4]
-    lb.recompute_player_leaderboard(scope, fmt)
+    lb.recompute_player_leaderboard(scope, ref, fmt)
 
 
 def _recompute_form_key(parts: list[str]) -> None:

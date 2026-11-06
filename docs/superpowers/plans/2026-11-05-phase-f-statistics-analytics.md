@@ -129,8 +129,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 3 Standings + NRR | done | 196e1cc |
 | 4 Leaderboards/records/H2H/form/compare | done | 5a4a4aa |
 | 5 Rankings | done | 0707517 |
-| 6 Search | done | — |
-| 7 Read API | — | — |
+| 6 Search | done | 1589333 |
+| 7 Read API | done | — |
 | 8 Endpoint coverage audit | — | — |
 | 9 Observability | — | — |
 | 10 Docs | — | — |
@@ -235,3 +235,26 @@ behaviour, ARCHITECTURE wins on module boundaries.
     asserts exact-team-beats-prefix-series and surname-prefix resolution.
   - `/search` endpoint is Group 7 (Read API); Group 6 delivers the service,
     safety, EXPLAIN gate and golden set it is built on.
+- **Group 7 rulings (implementation):**
+  - 14 endpoints: player statistics/form/compare, team statistics, match
+    statistics, series points-table + stats, batting/bowling/fielding
+    leaderboards, `/statistics/teams`, `/records/players`, `/records/teams`,
+    `/head-to-head`, `/search`. Views live in `apps.statistics.api` +
+    `apps.search.api`; the reads in `apps.statistics.services.reads`
+    (views → services is allowed by import-linter; no selector module needed).
+  - Series leaderboards needed SERIES-scope `leaderboard` rows: the recompute
+    dependency set now adds `leaderboard:player:SERIES:{series}:-|{fmt}` and
+    `recompute_player_leaderboard`/`_rebuild_scope` accept `scope_ref_id`
+    (digest-gated delete+bulk-insert per series).
+  - The leaderboard endpoints filter rows to their metric family, so
+    `/statistics/fielding` stays an honest empty list until a per-match
+    fielding source exists (a bare "all metrics" read would leak bowling rows).
+  - Player-scoped sub-resources (statistics/form/rankings) answer `301` for
+    merged ids via `resolve_player_redirect`, mirroring the profile route.
+  - Cache version namespaces reuse the Group 2/3 invalidators: player-scoped
+    `statistics:player:{id}` (stats + form), `statistics` (leaderboards +
+    records + h2h + team/series stats), `standings:{series}` (points table),
+    `statistics:match:{id}` (match stats), `search` (search).
+  - Guards: query-count ceilings (≤6) + a no-`delivery`-table scan assertion
+    across a representative endpoint set; `InvalidQuery` (400) for bad scope/
+    metric/compare/search params; unknown entity ids → 404.

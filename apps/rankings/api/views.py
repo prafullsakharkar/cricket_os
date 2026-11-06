@@ -14,11 +14,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.http import HttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.cache.policy import CachePlan, for_player
 from apps.core.cache_views import CachedReadMixin
+from apps.players.selectors import resolve_player_redirect
 from apps.rankings.selectors import (
     DEFAULT_CATEGORY,
     DEFAULT_FORMAT,
@@ -88,7 +90,13 @@ class PlayerRankingsView(CachedReadMixin, APIView):
         # API_SPEC §2.2: max-age=300 (matches the player profile plan).
         return for_player()
 
-    def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        # Merged (superseded) player ids answer 301, like the profile route.
+        canonical = resolve_player_redirect(kwargs["pk"])
+        if canonical is not None:
+            response = HttpResponse(status=301)
+            response["Location"] = f"/api/v1/players/{canonical}/"
+            return response
         rows = player_history(kwargs["pk"])
         return Response(
             {

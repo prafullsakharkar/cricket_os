@@ -92,13 +92,16 @@ def _supporting(metric: str, stat: Any) -> dict[str, Any]:
 def _ranked_rows(
     *,
     scope_type: str,
+    scope_ref_id: Any = None,
     fmt: str | None,
     entity_field: str,
     metrics: dict[str, tuple[str, bool]],
 ) -> tuple[list[Leaderboard], list[dict[str, Any]]]:
     """Build ranked ``Leaderboard`` rows for one scope + format from aggregates."""
     model: Any = PlayerCareerStat if entity_field == "player" else TeamStat
-    qs = model.objects.filter(scope_type=scope_type, format_type=fmt)
+    qs = model.objects.filter(scope_type=scope_type, scope_ref_id=scope_ref_id)
+    if fmt:
+        qs = qs.filter(format_type=fmt)
     rows: list[Leaderboard] = []
     source: list[dict[str, Any]] = []
 
@@ -125,7 +128,7 @@ def _ranked_rows(
             )
             kwargs: dict[str, Any] = {
                 "scope_type": scope_type,
-                "scope_ref_id": None,
+                "scope_ref_id": scope_ref_id,
                 "metric": metric,
                 "format_type": fmt,
                 "rank": rank,
@@ -151,28 +154,37 @@ def _ranked_rows(
 def _rebuild_scope(
     *,
     scope_type: str,
+    scope_ref_id: Any = None,
     fmt: str | None,
     entity_field: str,
     metrics: dict[str, tuple[str, bool]],
 ) -> None:
     rows, source = _ranked_rows(
-        scope_type=scope_type, fmt=fmt, entity_field=entity_field, metrics=metrics
+        scope_type=scope_type,
+        scope_ref_id=scope_ref_id,
+        fmt=fmt,
+        entity_field=entity_field,
+        metrics=metrics,
     )
     digest = _digest(source)
     existing = Leaderboard.objects.filter(
-        scope_type=scope_type, scope_ref_id=None, format_type=fmt
+        scope_type=scope_type, scope_ref_id=scope_ref_id, format_type=fmt
     ).first()
     if existing is not None and existing.inputs_digest == digest:
         return  # untouched: digest unchanged
-    Leaderboard.objects.filter(scope_type=scope_type, scope_ref_id=None, format_type=fmt).delete()
+    Leaderboard.objects.filter(
+        scope_type=scope_type, scope_ref_id=scope_ref_id, format_type=fmt
+    ).delete()
     if rows:
         for row in rows:
             row.inputs_digest = digest
         Leaderboard.objects.bulk_create(rows)
 
 
-def recompute_player_leaderboard(scope_type: str, fmt: str | None) -> None:
-    """Rebuild the player leaderboard for one scope + format (digest-gated).
+def recompute_player_leaderboard(
+    scope_type: str, scope_ref_id: Any = None, fmt: str | None = None
+) -> None:
+    """Rebuild the player leaderboard for one scope + ref + format (digest-gated).
 
     ``ux_leaderboard`` does not distinguish player vs team rows, and team
     aggregates are served by the records catalogue (``/statistics/teams``),
@@ -183,7 +195,13 @@ def recompute_player_leaderboard(scope_type: str, fmt: str | None) -> None:
         **_PLAYER_BOWLING_METRICS,
         **_PLAYER_FIELDING_METRICS,
     }
-    _rebuild_scope(scope_type=scope_type, fmt=fmt, entity_field="player", metrics=metrics)
+    _rebuild_scope(
+        scope_type=scope_type,
+        scope_ref_id=scope_ref_id,
+        fmt=fmt,
+        entity_field="player",
+        metrics=metrics,
+    )
 
 
 # --------------------------------------------------------------------------- #
