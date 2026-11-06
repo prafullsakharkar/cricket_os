@@ -127,7 +127,7 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 1 Models + migrations | done | 5075536 |
 | 2 Recompute pipeline + sweep | done | 700baa6 |
 | 3 Standings + NRR | done | 196e1cc |
-| 4 Leaderboards/records/H2H/form/compare | — | — |
+| 4 Leaderboards/records/H2H/form/compare | done | — |
 | 5 Rankings | — | — |
 | 6 Search | — | — |
 | 7 Read API | — | — |
@@ -175,3 +175,20 @@ behaviour, ARCHITECTURE wins on module boundaries.
   - Group 1 follow-up surfaced by the full suite: the Phase F aggregate +
     `rankings` models' permissions were missing from the admin "every
     permission" group → `administration/0005_phase_f_model_permissions`.
+- **Group 4 rulings (implementation):**
+  - Leaderboards read the digest-validated `PlayerCareerStat` aggregates, never
+    raw matches; `ux_leaderboard` folds `rank` into the unique, so a scope is
+    delete + bulk-inserted atomically when its inputs digest changes (rank
+    shifts never collide); ties break on (value, player id) — stable.
+  - `recompute_keys` gained dependency-aware ordering: aggregates (career/team/
+    h2h/standings) before the leaderboards that read them (a team leaderboard
+    must see freshly recomputed `TeamStat` rows).
+  - Team leaderboards were dropped at implementation: `ux_leaderboard` does not
+    distinguish player vs team rows, and the spec's `/statistics/teams` is a
+    *records* endpoint — `records.team_records` covers it (conflict recorded).
+  - Records catalogue is on-demand (no table): milestones from aggregates,
+    innings-level records (highest score, best bowling figures, highest team
+    total) from the per-match source rows; averages qualification-gated
+    (min 20 innings / 20 wickets / 500 balls).
+  - Fielding metrics have no per-match source yet, so fielding leaderboards are
+    honest empties (catalogue present, zeros excluded).

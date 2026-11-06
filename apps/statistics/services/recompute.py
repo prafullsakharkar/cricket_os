@@ -84,7 +84,8 @@ _NO_RESULTS = {ResultType.NO_RESULT, ResultType.ABANDONED, ResultType.CANCELLED}
 # team:{team}:{scope}:{ref|'-'}:{fmt|'-'}
 # h2h:{low}:{high}:{fmt|'-'}
 # standings:{series}:{stage|'-'}
-# (leaderboard:/form: reserved for Group 4)
+# leaderboard:{player|team}:{scope}:{ref|'-'}:{fmt|'-'}
+# form:{player}:{fmt|'-'}
 
 
 def _career_key(player_id: Any, scope: StatScope, ref: Any, fmt: str | None, gender: str) -> str:
@@ -137,6 +138,12 @@ def dependency_keys_for_match(match: Match) -> set[str]:
         low, high = team_ids[0], team_ids[1]
         keys.add(f"h2h:{low}:{high}:{fmt}")
         keys.add(f"h2h:{low}:{high}:-")
+    if stat_rows:
+        keys.add("leaderboard:player:CAREER:-:-")
+        keys.add(f"leaderboard:player:FORMAT:-:{fmt}")
+        for row in stat_rows:
+            keys.add(f"form:{row.player_id}:{fmt}")
+            keys.add(f"form:{row.player_id}:-")
     if match.series_id:
         keys.add(f"standings:{match.series_id}:{match.stage_id or '-'}")
     return keys
@@ -785,6 +792,22 @@ def reconcile_standings(
     return job
 
 
+def _recompute_leaderboard_key(parts: list[str]) -> None:
+    from apps.statistics.services import leaderboard as lb
+
+    scope = parts[2]
+    fmt = None if parts[4] == "-" else parts[4]
+    lb.recompute_player_leaderboard(scope, fmt)
+
+
+def _recompute_form_key(parts: list[str]) -> None:
+    from apps.statistics.services import leaderboard as lb
+
+    player_id = UUID(parts[1])
+    fmt = None if parts[2] == "-" else parts[2]
+    lb.recompute_form_key(player_id, fmt)
+
+
 def _recompute_key(key: str) -> None:
     parts = key.split(":")
     kind = parts[0]
@@ -796,6 +819,10 @@ def _recompute_key(key: str) -> None:
         _recompute_h2h_key(parts)
     elif kind == "standings":
         _recompute_standings_key(parts)
+    elif kind == "leaderboard":
+        _recompute_leaderboard_key(parts)
+    elif kind == "form":
+        _recompute_form_key(parts)
 
 
 # --------------------------------------------------------------------------- #
@@ -827,9 +854,28 @@ def _take_advisory_lock(key: str) -> None:
         cursor.execute("SELECT pg_advisory_xact_lock(%s::int, %s::int)", [lock1, lock2])
 
 
+#: Recompute order: source-derived aggregates first, then the leaderboards that
+#: read them (a team leaderboard must see the freshly recomputed TeamStat rows).
+_KEY_PRIORITY = {
+    "career": 0,
+    "team": 1,
+    "h2h": 2,
+    "standings": 3,
+    "leaderboard": 4,
+    "form": 5,
+}
+
+
 def recompute_keys(keys: Iterable[str]) -> None:
-    """Recompute every key, one transaction + advisory lock per key."""
-    for key in sorted(set(keys)):
+    """Recompute every key, one transaction + advisory lock per key.
+
+    Keys run in dependency order (aggregates before the leaderboards that read
+    them), then lexically, so the result is deterministic.
+    """
+    ordered = sorted(
+        set(keys), key=lambda k: (_KEY_PRIORITY.get(k.split(":")[0], 99), k)
+    )
+    for key in ordered:
         with transaction.atomic():
             _take_advisory_lock(key)
             _recompute_key(key)
