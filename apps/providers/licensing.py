@@ -37,10 +37,11 @@ from apps.core.errors import LicenseRequired
 FEATURE_COMMENTARY = "commentary"
 FEATURE_DERIVED_FEED = "derived_feed"
 FEATURE_BALL_DATA = "ball_data"
+FEATURE_RANKINGS = "rankings"
 
 #: Defaults applied to providers without an explicit policy entry: display is
-#: allowed, but commentary and derived feeds are not licensed and no retention
-#: limit applies.
+#: allowed, but commentary, derived feeds and rankings are not licensed and no
+#: retention limit applies.
 _DEFAULT_POLICY: dict[str, Any] = {
     "display_rights": True,
     "redistribution_rights": False,
@@ -48,6 +49,7 @@ _DEFAULT_POLICY: dict[str, Any] = {
     "attribution": None,
     "commentary_allowed": False,
     "derived_feeds_allowed": False,
+    "rankings_allowed": False,
     "ball_data_retention_days": None,
     "notes": None,
 }
@@ -64,6 +66,7 @@ class LicensedContentPolicy:
     attribution: str | None = None
     commentary_allowed: bool = False
     derived_feeds_allowed: bool = False
+    rankings_allowed: bool = False
     ball_data_retention_days: int | None = None
     notes: str | None = None
 
@@ -75,6 +78,8 @@ class LicensedContentPolicy:
             return self.derived_feeds_allowed
         if feature == FEATURE_BALL_DATA:
             return self.display_rights
+        if feature == FEATURE_RANKINGS:
+            return self.rankings_allowed
         return False
 
 
@@ -122,6 +127,7 @@ def license_meta(provider_or_code: Any) -> dict[str, bool]:
     return {
         "ball_data": policy.allows(FEATURE_BALL_DATA),
         "commentary": policy.allows(FEATURE_COMMENTARY),
+        "rankings": policy.allows(FEATURE_RANKINGS),
     }
 
 
@@ -205,6 +211,7 @@ __all__ = [
     "FEATURE_BALL_DATA",
     "FEATURE_COMMENTARY",
     "FEATURE_DERIVED_FEED",
+    "FEATURE_RANKINGS",
     "LicensedContentPolicy",
     "RetentionReport",
     "attribution_for",

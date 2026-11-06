@@ -95,7 +95,7 @@ def test_attribution_and_meta_flags() -> None:
     assert attribution_for("nobody") is None  # not required by default
 
     meta = license_meta("replay")
-    assert meta == {"ball_data": True, "commentary": False}
+    assert meta == {"ball_data": True, "commentary": False, "rankings": False}
     meta_licensed = license_meta("licensed")
     assert meta_licensed["commentary"] is True
 

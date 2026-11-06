@@ -589,9 +589,7 @@ def _config_for_series(config: RuleConfig, series: Any) -> RuleConfig:
         for key in ("points_win", "points_tie", "points_no_result", "points_draw", "points_loss")
         if key in series.points_system
     }
-    return (
-        dataclasses.replace(config, **cast(dict[str, Any], overrides)) if overrides else config
-    )
+    return dataclasses.replace(config, **cast(dict[str, Any], overrides)) if overrides else config
 
 
 def _result_char(line: TeamMatchLine) -> str:
@@ -872,9 +870,7 @@ def recompute_keys(keys: Iterable[str]) -> None:
     Keys run in dependency order (aggregates before the leaderboards that read
     them), then lexically, so the result is deterministic.
     """
-    ordered = sorted(
-        set(keys), key=lambda k: (_KEY_PRIORITY.get(k.split(":")[0], 99), k)
-    )
+    ordered = sorted(set(keys), key=lambda k: (_KEY_PRIORITY.get(k.split(":")[0], 99), k))
     for key in ordered:
         with transaction.atomic():
             _take_advisory_lock(key)

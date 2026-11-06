@@ -127,8 +127,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 1 Models + migrations | done | 5075536 |
 | 2 Recompute pipeline + sweep | done | 700baa6 |
 | 3 Standings + NRR | done | 196e1cc |
-| 4 Leaderboards/records/H2H/form/compare | done | — |
-| 5 Rankings | — | — |
+| 4 Leaderboards/records/H2H/form/compare | done | 5a4a4aa |
+| 5 Rankings | done | — |
 | 6 Search | — | — |
 | 7 Read API | — | — |
 | 8 Endpoint coverage audit | — | — |
@@ -192,3 +192,25 @@ behaviour, ARCHITECTURE wins on module boundaries.
     (min 20 innings / 20 wickets / 500 balls).
   - Fielding metrics have no per-match source yet, so fielding leaderboards are
     honest empties (catalogue present, zeros excluded).
+- **Group 5 rulings (implementation):**
+  - The fixture-backed adapter is registered under its own provider code
+    `fixture` (not `replay`): `get_rankings` is part of the `ProviderAdapter`
+    protocol, and overwriting the `replay` factory would break match replay.
+    The corpus lives at `tests/fixtures/rankings/{men,women}.yaml`
+    (`settings.RANKINGS_FIXTURE_DIR`); missing corpus = honest empty list.
+  - `FEATURE_RANKINGS` gates the whole import (403 `license_required` when the
+    provider's `LicensedContentPolicy` does not set `rankings_allowed`); the
+    `fixture` policy allows rankings, `cricsheet` (default policy) does not.
+  - Trend is derived from the previous dated snapshot (`"+N"` gained /
+    `"-N"` dropped / `"0"` unchanged, `None` without a baseline) unless the
+    row carries a provider trend; best rank/rating accumulate over the full
+    history for (player, gender, format, category).
+  - Unresolved provider player ids are reported through the dependency-inverted
+    reporter hook (`register_unresolved_reporter`); `apps.ingestion` wires the
+    `rankings_import` `IngestionError` DLQ writer in `register_default_reporters`
+    — `apps.rankings` never imports `apps.ingestion` (import-linter green).
+  - `license_meta` now also exposes the `rankings` flag (existing phase-d
+    licensing test updated to the new key).
+  - Test-isolation note: phase-d tests `clear_registry()` (wiping every
+    adapter); the rankings suite re-registers the fixture adapter in an
+    autouse fixture, matching the explicit-registration convention there.

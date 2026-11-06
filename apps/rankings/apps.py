@@ -12,5 +12,12 @@ class RankingsConfig(AppConfig):
     default_auto_field = "django.db.models.UUIDField"
 
     def ready(self) -> None:
-        # No eager subscriptions yet: rankings import is job-driven (Group 5).
-        pass
+        if getattr(self, "_ready_done", False):
+            return
+        # The fixture-backed adapter serves the recorded in-repo corpus (Group
+        # 5); a licensed provider registers its own adapter in its app config.
+        from apps.providers.registry import register_adapter
+        from apps.rankings.adapters import FixtureRankingsAdapter
+
+        register_adapter("fixture", FixtureRankingsAdapter)
+        self._ready_done = True

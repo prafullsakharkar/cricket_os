@@ -108,9 +108,10 @@ ENVIRONMENT = env("DJANGO_ENVIRONMENT")
 # Licensing policy (SECURITY §11: configuration, not code)
 # --------------------------------------------------------------------------- #
 #: Per-provider content policy. A licence change is a config change, never a
-#: code change. ``replay`` is the internal fake provider; a licensed provider
-#: adds an entry here (post Phase-0 gate). Absent entries fall back to the
-#: default policy (display allowed, commentary/derived feeds not licensed).
+#: code change. ``replay`` and ``fixture`` are the internal fake providers; a
+#: licensed provider adds an entry here (post Phase-0 gate). Absent entries
+#: fall back to the default policy (display allowed, commentary/derived feeds
+#: and rankings not licensed).
 LICENSED_CONTENT_POLICIES = {
     "replay": {
         "display_rights": True,
@@ -122,7 +123,25 @@ LICENSED_CONTENT_POLICIES = {
         "ball_data_retention_days": None,
         "notes": "Internal fake provider; data is never redistributed.",
     },
+    # The fixture-backed rankings adapter (Group 5) serves this provider's
+    # recorded in-repo corpus; rankings are licensed for the internal provider.
+    "fixture": {
+        "display_rights": True,
+        "redistribution_rights": False,
+        "attribution_required": True,
+        "attribution": "Fixture (internal rankings corpus)",
+        "commentary_allowed": False,
+        "derived_feeds_allowed": False,
+        "rankings_allowed": True,
+        "ball_data_retention_days": None,
+        "notes": "Internal recorded rankings corpus; never redistributed.",
+    },
 }
+
+# Recorded rankings corpus for the fixture-backed adapter (Group 5): in-repo
+# YAML snapshots keyed per gender (``men.yaml``/``women.yaml``), never a live
+# feed. Overridable so a deployment can point at its own recorded corpus.
+RANKINGS_FIXTURE_DIR = BASE_DIR / "tests" / "fixtures" / "rankings"
 
 # The dedicated PostgreSQL schema every table lives in.
 DB_SCHEMA = "cricket"
