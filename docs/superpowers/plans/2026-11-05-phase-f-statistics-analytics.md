@@ -133,7 +133,7 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 7 Read API | done | c4ed373 |
 | 8 Endpoint coverage audit | done | e1a08d2 |
 | 9 Observability | done | 9046dad |
-| 10 Docs | done | — |
+| 10 Docs | done | 853ac24 |
 
 ## Notes / risks
 
@@ -332,3 +332,16 @@ behaviour, ARCHITECTURE wins on module boundaries.
     alert contract, query guards); README index rows 18–20 + changelog entry.
   - DATABASE_SCHEMA already carried the Phase F additions (rule_version/
     inputs_digest/source_kind/watermark); untouched — the drift gate stays green.
+- **Benchmark (final report numbers, `scripts/benchmark_statistics.py`):**
+  - Uncached p95 read latency (build-on-miss through `django.test.Client`,
+    200-match corpus, 25 samples): leaderboard `/statistics/batting` 22.7 ms,
+    points-table 8.3 ms, player-statistics 12.9 ms, search 17.3 ms — all well
+    under the 200 ms budget (aggregates are precomputed + digest-validated).
+  - Tier-2 backfill: 200 matches in 299 s (~1.5 s/match marginal, scaled
+    entity pools so teams/players span ~25 matches each). Linear extrapolation:
+    ~25 min for 1,000 matches, ~4 h for 10,000. Caveat recorded: the per-match
+    cost is dominated by recomputing *spanning* keys (each match re-scans its
+    teams' history and series standings), so a fixed tiny pool or one giant
+    series makes backfill O(n²) — the pipeline's normal path is incremental
+    recompute per completion + sweep for healing; `rebuild_statistics all` is
+    a maintenance op best run per series.
