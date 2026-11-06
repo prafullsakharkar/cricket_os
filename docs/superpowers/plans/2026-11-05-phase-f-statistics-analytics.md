@@ -130,8 +130,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 4 Leaderboards/records/H2H/form/compare | done | 5a4a4aa |
 | 5 Rankings | done | 0707517 |
 | 6 Search | done | 1589333 |
-| 7 Read API | done | — |
-| 8 Endpoint coverage audit | — | — |
+| 7 Read API | done | c4ed373 |
+| 8 Endpoint coverage audit | done | — |
 | 9 Observability | — | — |
 | 10 Docs | — | — |
 
@@ -258,3 +258,28 @@ behaviour, ARCHITECTURE wins on module boundaries.
   - Guards: query-count ceilings (≤6) + a no-`delivery`-table scan assertion
     across a representative endpoint set; `InvalidQuery` (400) for bad scope/
     metric/compare/search params; unknown entity ids → 404.
+- **Group 8 rulings (implementation):**
+  - `docs/ENDPOINT_COVERAGE.md` audits every spec matrix row. 32/39 read
+    endpoints implemented; 4 deferred with reasons (`commentary` needs a
+    licensed feed — RSK-12 open; `matches/{id}/players/{pid}/performance` is a
+    projection of the match statistics endpoint; `players/{id}/matches` +
+    `teams/{id}/matches` are reachable via `/matches?team=&series=` filters);
+    the 3 `fantasy/*` rows are outside the Phase F brief.
+  - The nine thin endpoints live where their data does: match routes in
+    `apps.matches.api` (`MatchListView` reuses `_MatchListMixin`; overs/squads/
+    facts reuse `_MatchCachedView` with state-dependent cache), team squad in
+    `apps.teams.api`, series sub-resources + archives in `apps.competitions.api`
+    (a shared `_SeriesSubResource` invalidates under `series:{pk}`). Series
+    reads import `apps.matches.selectors.reads` — cross-domain, allowed by
+    import-linter.
+  - `match_squads` keeps empty buckets for teams with no `MatchPlayer` rows
+    (unannounced line-ups still render a complete squad); `match_overs` reads
+    `Over` rows only, never the partitioned `delivery` table; `match_facts`
+    404s unknown matches via `get_match`.
+  - `/archives` reuses `list_series` + `series_filters` (same `year/category/
+    type` validation as `/series`) with a `-start_date` default ordering.
+  - Partial rows are flagged in the audit: `/matches` implements the shared
+    `series/team/format/gender` filters (spec's `venue/from/to/status` not yet
+    wired), `/teams/{id}/squad` serves the currently active squad (no per-series
+    squad source table exists), `/series/{id}/stats` uses `?metric=` (consistent
+    with the other leaderboard endpoints) rather than the spec's `?type=`.

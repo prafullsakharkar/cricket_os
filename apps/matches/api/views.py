@@ -51,8 +51,11 @@ from apps.matches.selectors.reads import (
     get_innings,
     get_match,
     list_innings,
+    match_facts,
+    match_overs,
     match_scorecard,
     match_shell,
+    match_squads,
 )
 
 _DELIVERY_DEFAULT_LIMIT = 50
@@ -252,9 +255,52 @@ class DeliveriesView(_MatchCachedView):
         )
 
 
+# --------------------------------------------------------------------------- #
+# Coverage-audit thin endpoints (Group 8): overs / squads / facts
+# --------------------------------------------------------------------------- #
+
+
+class MatchOversView(_MatchCachedView):
+    """``GET /matches/{id}/overs`` — over-by-over summary (API_SPEC §3.2)."""
+
+    cache_namespace = "match:overs"
+
+    def get(self, request: Any, pk: str) -> Response:
+        match = get_match(pk)
+        self._match = match
+        rows = match_overs(pk)
+        return Response({"data": rows, "meta": {"count": len(rows)}})
+
+
+class MatchSquadsView(_MatchCachedView):
+    """``GET /matches/{id}/squads`` — playing XI + bench per team (§3.2)."""
+
+    cache_namespace = "match:squads"
+
+    def get(self, request: Any, pk: str) -> Response:
+        match = get_match(pk)
+        self._match = match
+        data = match_squads(pk)
+        return Response({"data": data, "meta": {"count": len(data["teams"])}})
+
+
+class MatchFactsView(_MatchCachedView):
+    """``GET /matches/{id}/facts`` — toss, officials, venue, result (§3.2)."""
+
+    cache_namespace = "match:facts"
+
+    def get(self, request: Any, pk: str) -> Response:
+        match = get_match(pk)
+        self._match = match
+        return Response({"data": match_facts(pk), "meta": {}})
+
+
 __all__ = [
     "DeliveriesView",
     "InningsView",
     "MatchDetailView",
+    "MatchFactsView",
+    "MatchOversView",
+    "MatchSquadsView",
     "ScorecardView",
 ]
