@@ -33,6 +33,7 @@ from apps.core.cache_views import CachedReadMixin
 from apps.core.pagination import CursorPagination
 from apps.live.services.breaker import is_open_for
 from apps.matches.selectors.reads import (
+    list_all_matches,
     list_live_matches,
     list_recent_matches,
     list_upcoming_matches,
@@ -125,8 +126,24 @@ class RecentMatchListView(_MatchListMixin):
         return for_fixtures()
 
 
+class MatchListView(_MatchListMixin):
+    """``GET /matches`` — every match (any status), newest start first.
+
+    Added by the Group 8 coverage audit: the spec's bare ``/matches`` list was
+    unassigned. Same shell items + cursor pagination as the three feeds.
+    """
+
+    selector = list_all_matches
+    ordering = ("-start_time_utc",)
+    cache_namespace = "matches:all"
+
+    def cache_plan(self) -> Any:
+        return for_fixtures()
+
+
 __all__ = [
     "LiveMatchListView",
+    "MatchListView",
     "RecentMatchListView",
     "UpcomingMatchListView",
 ]

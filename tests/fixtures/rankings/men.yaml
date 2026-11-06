@@ -1,0 +1,74 @@
+# Recorded ICC-style men's rankings snapshots (internal test corpus).
+# These are **recorded** rows (like the cricsheet match fixture): they are the
+# replay corpus for the fixture-backed rankings adapter, never a live feed and
+# never a guessed vendor API. Provider player ids resolve through
+# ``provider_entity_map`` (entity_type="player"); a row with no mapping is
+# reported to the DLQ (``rankings_import`` stage) and skipped.
+#
+# Two dated snapshots (2026-11-01, 2026-11-08) exercise trend derivation
+# (Rohit drops 1->2, Kane rises 2->1) and best-rank/best-rating history.
+rows:
+  # -- TEST batting, snapshot 1 (2026-11-01) -----------------------------
+  - provider_player_id: "rohit-sharma"
+    player_name: "Rohit Sharma"
+    team_name: "India"
+    gender: M
+    format_type: TEST
+    category: BATTING
+    rank: 1
+    rating: 870
+    points: "870.00"
+    as_of_date: "2026-11-01"
+  - provider_player_id: "kane-williamson"
+    player_name: "Kane Williamson"
+    team_name: "New Zealand"
+    gender: M
+    format_type: TEST
+    category: BATTING
+    rank: 2
+    rating: 855
+    points: "855.00"
+    as_of_date: "2026-11-01"
+  # -- TEST batting, snapshot 2 (2026-11-08) -----------------------------
+  - provider_player_id: "rohit-sharma"
+    player_name: "Rohit Sharma"
+    team_name: "India"
+    gender: M
+    format_type: TEST
+    category: BATTING
+    rank: 2
+    rating: 845
+    points: "845.00"
+    as_of_date: "2026-11-08"
+  - provider_player_id: "kane-williamson"
+    player_name: "Kane Williamson"
+    team_name: "New Zealand"
+    gender: M
+    format_type: TEST
+    category: BATTING
+    rank: 1
+    rating: 900
+    points: "900.00"
+    as_of_date: "2026-11-08"
+  # -- TEST bowling, snapshot 1 (single date) -----------------------------
+  - provider_player_id: "jasprit-bumrah"
+    player_name: "Jasprit Bumrah"
+    team_name: "India"
+    gender: M
+    format_type: TEST
+    category: BOWLING
+    rank: 1
+    rating: 908
+    points: "908.00"
+    as_of_date: "2026-11-01"
+  # -- Unresolved: no provider_entity_map row (DLQ, skipped) --------------
+  - provider_player_id: "unknown-star"
+    player_name: "Unknown Star"
+    team_name: "Mystery"
+    gender: M
+    format_type: TEST
+    category: BATTING
+    rank: 5
+    rating: 700
+    points: "700.00"
+    as_of_date: "2026-11-01"

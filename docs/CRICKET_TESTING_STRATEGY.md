@@ -335,6 +335,30 @@ touches ingestion, and a migration test if it touches the schema — all green i
 CI, with no reduction in coverage of `scoring/`. A schema change additionally
 requires a green reference-DDL ↔ migration drift check (§13.1).
 
+**Phase F additions.** The statistics/analytics surface adds its own gates
+(`make test-phasef`, wired into `make check`):
+
+- **Coverage:** ≥90% overall line+branch over `apps/statistics`,
+  `apps/search`, `apps/rankings` under `tests/phase_f`, then ≥95% branch on the
+  pipeline modules (`recompute`, `leaderboard`, `records`, `compare`, `reads`,
+  `search`, `import_rankings`) via `.coveragerc-phasef`.
+- **Independent oracle:** an unrelated plain-Python implementation over raw
+  fixture payloads must agree with the pipeline's career totals (averages, SR,
+  economy, best figures, NRR, points) — guards against the engine and the
+  pipeline sharing a bug.
+- **Digest/watermark invariants:** idempotence (identical digest → no write),
+  add-then-remove digest recovery, correction unions previous+current keys,
+  backfill digest == incremental digest, crash-then-sweep healing.
+- **No network in tests:** rankings are fixture-backed (in-repo corpus), never
+  a live feed.
+- **Search EXPLAIN gate:** with `enable_seqscan=off`, the plan for a `q` query
+  must reference the trigram indexes — a `%` search is never a sequential scan.
+- **Alert contract:** every rule in `ops/alerts/*.yml` references a registered
+  metric and a runbook heading; the Phase F rule files are included in the
+  phase-d contract test.
+- **Query guards:** the Phase F read endpoints run under query-count ceilings
+  and must never scan the partitioned `delivery` table.
+
 ---
 
 ## 16. CI database jobs

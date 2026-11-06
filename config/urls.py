@@ -27,6 +27,9 @@ urlpatterns: list[Any] = [
     path("api/v1/", include("apps.players.api.urls")),
     path("api/v1/", include("apps.competitions.api.urls")),
     path("api/v1/", include("apps.matches.api.urls")),
+    path("api/v1/", include("apps.statistics.api.urls")),
+    path("api/v1/", include("apps.rankings.api.urls")),
+    path("api/v1/", include("apps.search.api.urls")),
     path("api/v1/", include("apps.realtime.urls")),
 ]
 

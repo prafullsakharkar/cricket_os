@@ -455,7 +455,7 @@ wins on boundaries).
 
 ---
 
-## Phase F — Statistics & analytics
+## Phase F — Statistics & analytics — **DONE (10 groups, commits `5075536`…`9046dad`, branch `phase-f`)**
 
 **Goal:** career/format/team aggregates, rankings, leaderboards, comparisons,
 points tables, H2H, records, form.
@@ -476,6 +476,23 @@ points tables, H2H, records, form.
   sample of players/series.
 - **Risks:** metric-convention mismatch with provider (document and reconcile). **Effort:** 35.
 - **DoD:** statistics pages served entirely from precomputed tables, sub-200 ms.
+- **Delivered:** Tier-2 recompute pipeline + sweep with digest-validated
+  aggregates (career/team/H2H/standings/leaderboard/form), NRR + standings with
+  all edge cases, fixture-backed rankings import (provider data, never
+  computed) with trend/best-rank history, trigram cross-entity search with a
+  per-statement timeout + EXPLAIN gate, comparison + records + form, 23 read
+  endpoints, observability (metrics/alerts/runbooks), and a coverage audit
+  (`docs/ENDPOINT_COVERAGE.md`). Full pipeline walkthrough in
+  `docs/STATISTICS_PIPELINE.md`, search design in `docs/SEARCH.md`.
+- **Decisions and deferrals (recorded in the Phase F ledger):** aggregates are
+  recompute-from-source (never delta) and served only from digest-validated
+  rows; rankings are provider-imported rows (fixture corpus in this repo,
+  licensed adapter gated by Phase 0); `commentary`,
+  `matches/{id}/players/{pid}/performance`, `players|teams/{id}/matches` and
+  the `fantasy/*` endpoints are deferred (rationale in the coverage audit);
+  no DLS/rating computation in Phase F.
+- **Effort deviation:** 35 → **43** (10 groups instead of 7 — the coverage
+  audit added a group and the observability/coverage-gate work grew).
 
 ---
 

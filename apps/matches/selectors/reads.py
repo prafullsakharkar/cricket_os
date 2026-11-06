@@ -31,14 +31,23 @@ from django.utils import timezone
 
 from apps.core.enums import MatchStatus
 from apps.core.errors import NotFound
-from apps.deliveries.models import Delivery
+from apps.deliveries.models import Delivery, Over
 from apps.innings.models import Innings, InningsEvent, InningsSummary
-from apps.matches.models import Match, MatchEventLog, MatchResult, MatchTeam, Toss
+from apps.matches.models import (
+    Match,
+    MatchEventLog,
+    MatchOfficial,
+    MatchPlayer,
+    MatchResult,
+    MatchTeam,
+    Toss,
+)
 from apps.players.models import Player
 from apps.providers.licensing import attribution_for, license_meta
 from apps.providers.models import DataProvider
 from apps.scorecards.models import BattingEntry, BowlingEntry, FallOfWicket, Partnership
 from apps.teams.models import Team
+from apps.venues.models import Venue
 
 #: Match lifecycle states treated as finished (completed sub-resources cache
 #: much harder than live ones — API_SPECIFICATION §3.9).
@@ -715,6 +724,151 @@ def match_summaries(
     return items
 
 
+# --------------------------------------------------------------------------- #
+# Coverage-audit thin reads (Group 8)
+# --------------------------------------------------------------------------- #
+
+
+def list_all_matches(
+    *,
+    format_type: str | None = None,
+    gender: str | None = None,
+    series_id: Any = None,
+    team_id: Any = None,
+) -> Any:
+    """Every match (any status), newest start first (``GET /matches``)."""
+    return _match_filters(
+        format_type=format_type, gender=gender, series_id=series_id, team_id=team_id
+    ).order_by("-start_time_utc", "-id")
+
+
+def match_overs(match_id: Any) -> list[dict[str, Any]]:
+    """Over-by-over summaries for a match (API_SPEC §3.2), innings-major."""
+    rows = (
+        Over.objects.filter(innings__match_id=match_id)
+        .select_related("innings", "bowler")
+        .order_by("innings__innings_number", "over_number")
+    )
+    return [
+        {
+            "innings": over.innings.innings_number,
+            "over": over.over_number,
+            "bowler": _player_brief(over.bowler),
+            "runs": over.runs_conceded,
+            "wickets": over.wickets,
+            "is_maiden": over.is_maiden,
+            "deliveries": over.deliveries_count,
+            "is_complete": over.is_complete,
+        }
+        for over in rows
+    ]
+
+
+def match_squads(match_id: Any) -> dict[str, Any]:
+    """Playing XI + bench per team (API_SPEC §3.2).
+
+    Teams with no ``MatchPlayer`` rows keep empty buckets rather than being
+    dropped, so a fixture with unannounced line-ups is still complete.
+    """
+    buckets: dict[str, dict[str, Any]] = {}
+    for mt in (
+        MatchTeam.objects.filter(match_id=match_id).select_related("team").order_by("team_number")
+    ):
+        buckets[str(mt.team_id)] = {
+            "team": {"id": str(mt.team_id), "name": mt.team.name},
+            "playing_xi": [],
+            "bench": [],
+        }
+    for mp in (
+        MatchPlayer.objects.filter(match_id=match_id)
+        .select_related("player", "team")
+        .order_by("team_id", "-is_playing_xi", "batting_position")
+    ):
+        bucket = buckets.setdefault(
+            str(mp.team_id),
+            {
+                "team": {
+                    "id": str(mp.team_id),
+                    "name": mp.team.name if mp.team else "",
+                },
+                "playing_xi": [],
+                "bench": [],
+            },
+        )
+        target = bucket["playing_xi"] if mp.is_playing_xi else bucket["bench"]
+        target.append(mp.player.full_name)
+    return {"teams": list(buckets.values())}
+
+
+def match_facts(match_id: Any) -> dict[str, Any]:
+    """Toss, officials, venue and result for a match (API_SPEC §3.2)."""
+    match = get_match(match_id)
+    toss = Toss.objects.filter(match_id=match_id).select_related("winner_team").first()
+    result = MatchResult.objects.filter(match_id=match_id).select_related("winner_team").first()
+    officials = list(
+        MatchOfficial.objects.filter(match_id=match_id).select_related("country").order_by("role")
+    )
+    venue = match.venue
+    return {
+        "toss": {
+            "winner": toss.winner_team.name if toss and toss.winner_team else None,
+            "decision": toss.decision if toss else None,
+            "time": toss.toss_time.isoformat() if toss and toss.toss_time else None,
+        },
+        "officials": [
+            {
+                "name": official.official_name,
+                "role": official.role,
+                "country": official.country.name if official.country else None,
+            }
+            for official in officials
+        ],
+        "venue": ({"id": str(venue.id), "name": venue.name, "city": venue.city} if venue else None),
+        "result": (
+            {
+                "result_type": result.result_type,
+                "winner": result.winner_team.name if result.winner_team else None,
+                "text": result.result_text,
+            }
+            if result
+            else None
+        ),
+    }
+
+
+def series_squads(series_id: Any) -> dict[str, list[str]]:
+    """Union of playing-XI players across a series' matches, keyed by team name."""
+    rows = (
+        MatchPlayer.objects.filter(match__series_id=series_id)
+        .select_related("player", "team")
+        .order_by("team__name", "player__full_name")
+    )
+    teams: dict[str, list[str]] = {}
+    for mp in rows:
+        name = mp.team.name if mp.team else "Unknown"
+        teams.setdefault(name, []).append(mp.player.full_name)
+    return teams
+
+
+def series_venues(series_id: Any) -> list[dict[str, Any]]:
+    """Distinct venues used by a series' matches (ordered by name)."""
+    venues = (
+        Venue.objects.filter(matches__series_id=series_id)
+        .select_related("country")
+        .distinct()
+        .order_by("name")
+    )
+    return [
+        {
+            "id": str(venue.id),
+            "name": venue.name,
+            "city": venue.city,
+            "country": venue.country.name if venue.country else None,
+        }
+        for venue in venues
+    ]
+
+
 __all__ = [
     "DEFAULT_RECENT_DAYS",
     "DEFAULT_UPCOMING_DAYS",
@@ -724,11 +878,17 @@ __all__ = [
     "deliveries_queryset",
     "get_innings",
     "get_match",
+    "list_all_matches",
     "list_innings",
     "list_live_matches",
     "list_recent_matches",
     "list_upcoming_matches",
+    "match_facts",
+    "match_overs",
     "match_scorecard",
     "match_shell",
+    "match_squads",
     "match_summaries",
+    "series_squads",
+    "series_venues",
 ]

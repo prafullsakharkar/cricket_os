@@ -377,3 +377,90 @@ reference-data merge), or a workload mix change.
 
 **Verification.** Miss ratio returns under 50%; `cache_hits_total` dominates;
 p95 cached-read latency returns to the ≤200 ms budget.
+
+## Statistics pipeline
+
+**Symptoms.** `StatisticsRecomputeErrors`, `StatisticsWatermarkLagHigh`,
+`StandingsReconciliationMismatch`, `LeaderboardRebuildStorm`.
+
+**Detection.** `statistics_recompute_errors_total` / `statistics_watermark_lag`
+(backlog of completed matches with missing or stale aggregates) /
+`standings_reconciliation_mismatches_total` / `leaderboard_rebuilds_total`
+(labelled by scope).
+
+**Impact.** The statistics/rankings endpoints read **digest-validated
+aggregate rows** — when the pipeline is behind, the API serves last-known-good
+aggregates (never raw scans) and `meta` does not advertise freshness. A
+`StandingsReconciliationMismatch` means a provider points table disagrees with
+the pipeline; the reconciliation invariant is to open a job + DLQ row, never to
+correct silently.
+
+**Recovery.**
+
+1. **Errors first.** Read the DLQ (`dlq_depth`, runbook: DLQ triage) for
+   `statistics_recompute_errors_total` scope labels. Fix the root cause, then
+   re-run `python manage.py rebuild_statistics <scope>`.
+2. **Backlog.** Confirm the sweep is scheduled; run
+   `python manage.py sweep_statistics` (or `rebuild_statistics all`) to fold
+   the backlog. Watch `statistics_watermark_lag` drop to 0.
+3. **Reconciliation.** A `StandingsReconciliationMismatch` job needs an
+   operator to decide which side is right, fix the source, and re-run the
+   reconciliation — never "accept provider" blindly.
+4. **Rebuild storm.** Check `corrections_total` (a burst of corrections
+   legitimately re-rebuilds); if there is no correction burst, look for a
+   digest bug in `apps/statistics/services/recompute.py`.
+
+**Verification.** `statistics_watermark_lag == 0`; the error counter
+flatlines; reconciliation jobs resolve to `resolved`.
+
+## Search
+
+**Symptoms.** `SearchTimeoutHigh`.
+
+**Detection.** `search_timeouts_total` (searches cancelled by the per-statement
+`SET LOCAL statement_timeout`) and `search_latency_seconds` (histogram) /
+`search_queries_total{types=...}`.
+
+**Impact.** A cancelled search surfaces as a 5xx; clients retry, but the
+per-statement timeout (default 200 ms) protects the pool from pathological
+queries, so the blast radius is one request, not the connection pool.
+
+**Recovery.**
+
+1. Confirm the trigram indexes exist
+   (`ix_player_name_trgm`, `ix_team_name_trgm`, series/competition name
+   indexes) — a missing index turns `%` into a sequential scan and the timeout
+   fires. The EXPLAIN gate in the test suite proves the plan uses them.
+2. If latency rose with no schema change, check the workload: `q` is bounded
+   to 2–100 chars and results are capped, so sustained timeouts usually mean an
+   index regression.
+3. Raise `SEARCH_STATEMENT_TIMEOUT_MS` only after ruling out the index.
+
+**Verification.** `search_timeouts_total` flatlines; p95
+`search_latency_seconds` returns under the configured budget.
+
+## Rankings
+
+**Symptoms.** `RankingsImportStalled`.
+
+**Detection.** `rankings_import_rows_total{status=...}` — zero rows across a
+day means the `import_rankings` job did not run (or found an empty corpus).
+
+**Impact.** `/rankings` serves the **latest imported snapshot** without
+failing — the data silently ages. `player_ranking` rows are provider data,
+never computed here, so the fix is operational, not algorithmic.
+
+**Recovery.**
+
+1. Check the scheduler ran `python manage.py import_rankings --provider <code>`
+   (the fixture-backed corpus in a test/dev deployment, a licensed adapter in
+   production).
+2. Confirm the corpus files exist and parse (`settings.RANKINGS_FIXTURE_DIR`,
+   `men.yaml` / `women.yaml`) and the provider's `LicensedContentPolicy`
+   allows rankings (`rankings_allowed`).
+3. Unresolved provider player ids land in the DLQ (`rankings_import` stage) —
+   seed the identity map (`provider_entity_map`, entity_type `player`) and
+   re-import.
+
+**Verification.** `rankings_import_rows_total` resumes its daily increments;
+`/rankings` `meta.as_of_date` advances.

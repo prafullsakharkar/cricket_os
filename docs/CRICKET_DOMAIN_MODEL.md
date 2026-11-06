@@ -457,6 +457,19 @@ diagram and PostgreSQL DDL.
 - **Unique:** `(series_id, coalesce(stage_id,'0'), team_id)`.
 - **Class:** DRV/CACHE.
 
+### 4.9 StatisticsWatermark (per-match recompute checkpoint, Phase F)
+- **Purpose:** records that a completed match's Tier-2 aggregates are up to
+  date. The sweep compares the watermark's `source_digest` against a fresh
+  digest of the match's source rows; a mismatch (or a missing watermark) means
+  the match is stale and must be recomputed. The watermark also stores the
+  aggregate keys the match contributed to, so a **correction** recomputes the
+  union of the previous and current key sets (a match removed from a series
+  still cleans up the series keys that previously contained it).
+- **Fields:** `match_id uuid PK FK`; `source_digest text`; `status text`
+  (`pending|done`); `aggregate_keys jsonb` (the key set, see
+  `docs/STATISTICS_PIPELINE.md`); `computed_at`.
+- **Class:** DRV/CACHE (pipeline metadata, not served directly).
+
 ---
 
 ## 5. Optional fantasy scoring

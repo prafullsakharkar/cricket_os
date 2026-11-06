@@ -1,0 +1,25 @@
+# Phase F gate (`make test-phasef` / CI): the statistics pipeline's high-risk
+# modules must hold >= 95% line AND branch coverage. The app-wide gate is 90%
+# line; these modules encode the money logic — digest-validated recompute +
+# watermark, dependency sets, standings/NRR keys, leaderboard rebuilds,
+# trigram search ranking — where a regression silently corrupts the aggregates
+# the API serves.
+#
+# `include` (glob patterns) is used instead of `source` because coverage 7.x
+# treats a `source` entry ending in `.py` as a *package name* and reports
+# "never imported".
+[run]
+branch = true
+include =
+    */apps/statistics/services/recompute.py
+    */apps/statistics/services/leaderboard.py
+    */apps/statistics/services/records.py
+    */apps/statistics/services/compare.py
+    */apps/statistics/services/reads.py
+    */apps/search/services/search.py
+    */apps/rankings/services/import_rankings.py
+
+[report]
+fail_under = 95
+show_missing = true
+skip_covered = true

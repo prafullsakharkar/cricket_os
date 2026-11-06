@@ -58,6 +58,14 @@ TOPIC_VENUE_UPDATED = "venue.updated"
 TOPIC_SERIES_UPDATED = "series.updated"
 #: Cache invalidation: a competition changed (Phase E reference data).
 TOPIC_COMPETITION_UPDATED = "competition.updated"
+#: Tier-2: aggregate statistics recomputed for a player (Phase F cache
+#: invalidation; in-process post-commit topic only, not a durable stream).
+TOPIC_STATS_UPDATED = "stats.updated"
+#: Tier-2: tournament standings recomputed for a series (Phase F cache
+#: invalidation; in-process post-commit topic only, not a durable stream).
+TOPIC_STANDINGS_UPDATED = "standings.updated"
+#: Tier-2: provider rankings imported/updated (Phase F cache invalidation).
+TOPIC_RANKING_UPDATED = "ranking.updated"
 
 _handlers: dict[str, list[Callable[[Any], None]]] = {}
 
@@ -108,8 +116,11 @@ __all__ = [
     "TOPIC_PLAYER_MERGED",
     "TOPIC_PLAYER_UPDATED",
     "TOPIC_PROVIDER_MAP_VERIFIED",
+    "TOPIC_RANKING_UPDATED",
     "TOPIC_SCORECARD_UPDATED",
     "TOPIC_SERIES_UPDATED",
+    "TOPIC_STANDINGS_UPDATED",
+    "TOPIC_STATS_UPDATED",
     "TOPIC_TEAM_UPDATED",
     "TOPIC_VENUE_UPDATED",
     "clear_subscriptions",

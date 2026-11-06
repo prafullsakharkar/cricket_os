@@ -4,6 +4,8 @@
 # Phase C: the match/innings/delivery/scorecard/statistics/ops tables
 # (DATABASE_SCHEMA §3.5–3.8). `delivery` is compared at the partitioned-parent
 # level only (partition children are excluded by schema_manifest.sql).
+# Phase F: the aggregate/standings/rankings tables + recompute watermark
+# (DATABASE_SCHEMA §3.7).
 country
 governing_body
 venue
@@ -46,3 +48,11 @@ sync_checkpoint
 data_correction
 match_event_log
 reconciliation_job
+player_career_stat
+team_stat
+head_to_head
+player_ranking
+leaderboard
+form_trend
+tournament_standings
+statistics_watermark

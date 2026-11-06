@@ -199,6 +199,8 @@ source_modules = [
   "apps.deliveries",
   "apps.scorecards",
   "apps.statistics",
+  "apps.rankings",
+  "apps.search",
   "apps.synchronization",
 ]
 forbidden_modules = ["apps.administration", "apps.ingestion", "apps.realtime"]
