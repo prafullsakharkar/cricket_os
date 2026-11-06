@@ -227,6 +227,55 @@ CACHE_BUILD_SECONDS = metric(
 CACHE_BREAKER_OPEN = metric(
     "cache_breaker_open", "Local cache breaker state (0=closed, 1=open)", kind="gauge"
 )
+# Phase F — statistics/analytics observability (ROADMAP Phase F Group 9).
+STATISTICS_RECOMPUTE_JOBS = metric(
+    "statistics_recompute_jobs_total",
+    "Tier-2 recompute keys completed",
+    labelnames=("scope",),
+)
+STATISTICS_RECOMPUTE_ERRORS = metric(
+    "statistics_recompute_errors_total",
+    "Tier-2 recompute keys that raised",
+    labelnames=("scope",),
+)
+STATISTICS_RECOMPUTE_SECONDS = metric(
+    "statistics_recompute_seconds",
+    "Wall time per Tier-2 recompute key",
+    kind="histogram",
+)
+STATISTICS_WATERMARK_LAG = metric(
+    "statistics_watermark_lag",
+    "Terminal matches whose aggregates are stale or missing",
+    kind="gauge",
+)
+STANDINGS_RECONCILIATION_MISMATCHES = metric(
+    "standings_reconciliation_mismatches_total",
+    "Standings digests that disagreed with the provider (reconciliation jobs opened)",
+)
+LEADERBOARD_REBUILDS = metric(
+    "leaderboard_rebuilds_total",
+    "Digest-gated leaderboard rebuilds (rows bulk-replaced)",
+    labelnames=("scope",),
+)
+RANKINGS_IMPORT_ROWS = metric(
+    "rankings_import_rows_total",
+    "Ranking rows imported, updated or skipped",
+    labelnames=("status",),
+)
+SEARCH_QUERIES = metric(
+    "search_queries_total",
+    "Cross-entity search queries",
+    labelnames=("types",),
+)
+SEARCH_TIMEOUTS = metric(
+    "search_timeouts_total", "Cross-entity searches cancelled by the statement timeout"
+)
+SEARCH_LATENCY_SECONDS = metric(
+    "search_latency_seconds",
+    "Wall time per cross-entity search",
+    kind="histogram",
+)
+
 # Realtime fan-out (API_SPEC §3.8, PERFORMANCE §8, SECURITY §8).
 REALTIME_CONNECTIONS = metric(
     "realtime_connections", "Subscribed connections on this node", kind="gauge"

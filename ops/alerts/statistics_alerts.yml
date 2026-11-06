@@ -1,0 +1,99 @@
+# Statistics/analytics alert rules (Phase F Group 9).
+#
+# Every alert maps to a runbook in docs/RUNBOOKS.md. Thresholds are
+# configuration, not code — tune here, redeploy the rule group, never touch a
+# service. Metric names come from apps/core/metrics.py (the in-process facade
+# renders the same names).
+#
+# NOTE: this is a static rule file for the Prometheus-compatible operator.
+# `prometheus_client` is not installed in the offline build image, so these
+# rules are validated by tests/phase_d/test_observability.py (YAML parse +
+# metric-name/runbook cross-checks) rather than by a live Prometheus here.
+groups:
+  - name: statistics_pipeline
+    rules:
+      # A Tier-2 recompute key raised. One key never poisons the rest of the
+      # set, but repeated errors mean the aggregate tables are silently stale.
+      - alert: StatisticsRecomputeErrors
+        expr: |
+          increase(statistics_recompute_errors_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "statistics pipeline"
+        annotations:
+          summary: "Tier-2 recompute keys are failing"
+          description: "statistics_recompute_errors_total increased in the last 15m. Aggregate tables may be stale. See runbook: statistics pipeline."
+
+      # Completed matches are not being folded into the aggregates. The sweep
+      # stamps statistics_watermark_lag with the backlog; a sustained high
+      # value means the sweep is not keeping up (or is not scheduled).
+      - alert: StatisticsWatermarkLagHigh
+        expr: |
+          statistics_watermark_lag > 50
+        for: 30m
+        labels:
+          severity: warning
+          runbook: "statistics pipeline"
+        annotations:
+          summary: "Aggregate recompute backlog is high"
+          description: "{{ $value }} completed matches are missing or stale aggregates. See runbook: statistics pipeline."
+
+      # A provider points table disagreed with the pipeline's standings. The
+      # reconciliation invariant is to open a job + DLQ row, never to correct
+      # silently — an alert means an operator must adjudicate the difference.
+      - alert: StandingsReconciliationMismatch
+        expr: |
+          increase(standings_reconciliation_mismatches_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          runbook: "statistics pipeline"
+        annotations:
+          summary: "Standings disagree with the provider"
+          description: "A standings reconciliation mismatch was opened as a job. See runbook: statistics pipeline."
+
+      # A digest-gated leaderboard rebuild is expected on data change; a storm
+      # usually means an invalidation loop (repeated corrections) or a bug.
+      - alert: LeaderboardRebuildStorm
+        expr: |
+          increase(leaderboard_rebuilds_total[15m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "statistics pipeline"
+        annotations:
+          summary: "Leaderboard rebuilds are storming"
+          description: "Over 1000 digest-gated leaderboard rebuilds in 15m. See runbook: statistics pipeline."
+
+  - name: search
+    rules:
+      # A search was cancelled by its per-statement timeout. A few are benign
+      # (pathological user queries); a sustained rate means an index is missing
+      # or the workload changed.
+      - alert: SearchTimeoutHigh
+        expr: |
+          increase(search_timeouts_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "search"
+        annotations:
+          summary: "Cross-entity searches are timing out"
+          description: "{{ $value }} searches hit the statement timeout in the last 15m. See runbook: search."
+
+  - name: rankings
+    rules:
+      # Rankings are provider data imported on a schedule (import_rankings).
+      # A day with zero rows means the import job stopped or the corpus is
+      # stale — the /rankings endpoint serves an old snapshot without failing.
+      - alert: RankingsImportStalled
+        expr: |
+          increase(rankings_import_rows_total[24h]) == 0
+        for: 25h
+        labels:
+          severity: warning
+          runbook: "rankings"
+        annotations:
+          summary: "Rankings import has not run in 24h"
+          description: "No ranking rows were imported/updated in the last 24h. See runbook: rankings."

@@ -131,15 +131,16 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 5 Rankings | done | 0707517 |
 | 6 Search | done | 1589333 |
 | 7 Read API | done | c4ed373 |
-| 8 Endpoint coverage audit | done | — |
-| 9 Observability | — | — |
+| 8 Endpoint coverage audit | done | e1a08d2 |
+| 9 Observability | done | — |
 | 10 Docs | — | — |
 
 ## Notes / risks
 
-- Gates: `make check` green (incl. new `test-phasef` coverage target ≥90%, and
-  ≥95% branch for recompute/watermark, standings, search ranking); schema-ddl +
-  migration-drift workflows green; import-linter contracts extended for
+- Gates: `make check` green (incl. `test-phasef`: ≥90% overall line+branch on
+  the Phase F apps, ≥95% branch on the pipeline modules via `.coveragerc-phasef`
+  — final 93.95% / 97.07%); schema-ddl + migration-drift workflows green
+  locally (50 scoped tables, no drift); import-linter contracts extended for
   statistics/rankings/search; no network in tests; no DLS/rating computation.
 - Oracle: an independent plain-Python reference implementation over raw fixture
   rows must agree with the pipeline (averages, SR, economy, best figures, NRR,
@@ -283,3 +284,34 @@ behaviour, ARCHITECTURE wins on module boundaries.
     wired), `/teams/{id}/squad` serves the currently active squad (no per-series
     squad source table exists), `/series/{id}/stats` uses `?metric=` (consistent
     with the other leaderboard endpoints) rather than the spec's `?type=`.
+- **Group 9 rulings (implementation):**
+  - Phase F metrics live in `apps/core/metrics.py` behind the existing facade:
+    `statistics_recompute_jobs_total{scope}` / `_errors_total{scope}` /
+    `statistics_recompute_seconds` (histogram), `statistics_watermark_lag`
+    (gauge stamped by the sweep), `standings_reconciliation_mismatches_total`,
+    `leaderboard_rebuilds_total{scope}`, `rankings_import_rows_total{status}`,
+    `search_queries_total{types}` / `search_timeouts_total` /
+    `search_latency_seconds`. No unbounded-id labels.
+  - Instrumentation points: `recompute_keys` counts completed keys + latency
+    and re-raises on error (one key never poisons the set); `_rebuild_scope`
+    counts digest-gated rebuilds; `import_rankings` counts by status; the
+    search service counts queries/timeouts/latency and counts a cancelled
+    statement before re-raising (timeout → 5xx, never a silent empty page).
+  - `ops/alerts/statistics_alerts.yml`: 6 rules in three groups
+    (statistics_pipeline / search / rankings), each mapping to a RUNBOOKS
+    heading; validated by the existing phase-d alert→metric→runbook contract.
+    `docs/RUNBOOKS.md` gained "Statistics pipeline", "Search" and "Rankings"
+    sections (466 lines).
+  - `test-phasef` gate: overall ≥90% line+branch over `apps/statistics` +
+    `apps/search` + `apps/rankings` under `tests/phase_f`, then ≥95% branch on
+    the pipeline modules (`recompute`, `leaderboard`, `records`, `compare`,
+    `reads`, `search`, `import_rankings`) via `.coveragerc-phasef`. Final
+    numbers: 93.95% overall, 97.07% pipeline branch.
+  - Coverage closure: the untested management commands are Phase F
+    deliverables (their backfill numbers feed the final report), so tests now
+    exercise `rebuild_statistics` (arg validation, dry-run, Tier-1 builder
+    integration + warning path, digest parity) and `import_rankings` (corpus
+    import, `--as-of` replay, bad input) through `call_command`; edge-branch
+    tests close the recompute/reads gaps (SEASON/VENUE scopes, empty-scope
+    deletes, H2H TIE/DRAW/NO_RESULT/high-win, reconciliation diffs, event
+    guards, merge re-point of distinct matches).

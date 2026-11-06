@@ -21,6 +21,7 @@ from typing import Any
 
 from django.utils import timezone
 
+from apps.core import metrics as core_metrics
 from apps.core.enums import MatchStatus
 from apps.scoring.config import preset_for_format
 from apps.scoring.types import BattingLine, BowlingLine, Format
@@ -179,6 +180,7 @@ def _rebuild_scope(
         for row in rows:
             row.inputs_digest = digest
         Leaderboard.objects.bulk_create(rows)
+    core_metrics.LEADERBOARD_REBUILDS.labels(scope=scope_type).inc()
 
 
 def recompute_player_leaderboard(

@@ -38,6 +38,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any, cast
@@ -47,6 +48,7 @@ from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.core import metrics
 from apps.core.enums import MatchStatus, StatScope
 from apps.matches.models import Match, MatchResult
 from apps.scoring.aggregates import career_totals, season_totals
@@ -782,6 +784,7 @@ def reconcile_standings(
     differences = _diff_standings(ours, provider_rows)
     if not differences:
         return None
+    metrics.STANDINGS_RECONCILIATION_MISMATCHES.inc()
     job = open_job(
         f"standings:{series_id}:{stage_key}",
         expected={"provider_rows": dict(provider_rows)},
@@ -871,13 +874,26 @@ def recompute_keys(keys: Iterable[str]) -> None:
     """Recompute every key, one transaction + advisory lock per key.
 
     Keys run in dependency order (aggregates before the leaderboards that read
-    them), then lexically, so the result is deterministic.
+    them), then lexically, so the result is deterministic. Each key records the
+    ``statistics_recompute_jobs_total{scope=}`` counter + a latency histogram
+    observation; a key that raises is counted separately and re-raised (the
+    caller's transaction boundary is unaffected — one key never poisons the
+    rest of the set).
     """
     ordered = sorted(set(keys), key=lambda k: (_KEY_PRIORITY.get(k.split(":")[0], 99), k))
     for key in ordered:
-        with transaction.atomic():
-            _take_advisory_lock(key)
-            _recompute_key(key)
+        scope = key.split(":")[0]
+        started = time.perf_counter()
+        try:
+            with transaction.atomic():
+                _take_advisory_lock(key)
+                _recompute_key(key)
+        except Exception:
+            metrics.STATISTICS_RECOMPUTE_ERRORS.labels(scope=scope).inc()
+            raise
+        finally:
+            metrics.STATISTICS_RECOMPUTE_SECONDS.observe(time.perf_counter() - started)
+        metrics.STATISTICS_RECOMPUTE_JOBS.labels(scope=scope).inc()
 
 
 def affected_keys(match: Match) -> set[str]:
@@ -937,20 +953,31 @@ def recompute_match(match: Match, *, correction: bool = False) -> list[str]:
 
 
 def sweep_stale_statistics() -> int:
-    """Recompute every terminal match whose aggregates are missing or stale."""
-    healed = 0
+    """Recompute every terminal match whose aggregates are missing or stale.
+
+    The backlog size is stamped onto ``statistics_watermark_lag`` so the
+    sweep's health is observable even when it is not running (alert:
+    ``StatisticsWatermarkLagHigh``).
+    """
     matches = (
         Match.objects.filter(status=MatchStatus.COMPLETED)
         .filter(Q(player_stats__isnull=False) | Q(result__isnull=False) | Q(innings__isnull=False))
         .distinct()
         .order_by("start_time_utc", "id")
     )
+    stale: list[tuple[Match, bool]] = []
     for match in matches:
         watermark = StatisticsWatermark.objects.filter(match_id=match.id).first()
         current = _match_source_digest(match)
         if watermark is None or watermark.source_digest != current or watermark.status != "done":
-            recompute_match(match, correction=watermark is not None)
-            healed += 1
+            # A match that already has a watermark is a correction (union with
+            # its previous dependency set); one without is a fresh recompute.
+            stale.append((match, watermark is not None))
+    metrics.STATISTICS_WATERMARK_LAG.set(len(stale))
+    healed = 0
+    for match, correction in stale:
+        recompute_match(match, correction=correction)
+        healed += 1
     return healed
 
 

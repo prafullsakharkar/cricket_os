@@ -25,13 +25,16 @@ player match. Ties break by (type order, name).
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db import connection, transaction
+from django.db import OperationalError, connection, transaction
 from django.db.models import QuerySet
+
+from apps.core import metrics
 
 #: Annotation name carrying the per-row trigram similarity.
 SIM_ATTR = "_sim"
@@ -167,12 +170,24 @@ def cross_entity_search(
     if unknown:
         raise ValueError(f"unknown search type: {sorted(unknown)[0]!r}")
     limit = min(max(int(limit), 1), MAX_LIMIT)
+    types_key = ",".join(types)
 
+    started = time.perf_counter()
     results: list[dict[str, Any]] = []
-    with _statement_timeout(timeout_ms):
-        for entity_type in types:
-            results.extend(_search_entity(entity_type, query))
+    try:
+        with _statement_timeout(timeout_ms):
+            for entity_type in types:
+                results.extend(_search_entity(entity_type, query))
+    except OperationalError:
+        # A pathological query hit the statement timeout and was cancelled by
+        # Postgres; count it so the SearchTimeoutHigh alert can fire, then let
+        # the error surface as the 5xx the caller decides on.
+        metrics.SEARCH_TIMEOUTS.inc()
+        raise
+    finally:
+        metrics.SEARCH_LATENCY_SECONDS.observe(time.perf_counter() - started)
     results.sort(key=_sort_key)
+    metrics.SEARCH_QUERIES.labels(types=types_key).inc()
     return results[:limit]
 
 

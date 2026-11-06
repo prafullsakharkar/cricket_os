@@ -48,6 +48,17 @@ def test_metrics_endpoint_serves_prometheus_exposition() -> None:
         "cache_hits_total",
         "cache_breaker_open",
         "cache_degraded_total",
+        # Phase F statistics/analytics surfaces.
+        "statistics_recompute_jobs_total",
+        "statistics_recompute_errors_total",
+        "statistics_recompute_seconds",
+        "statistics_watermark_lag",
+        "standings_reconciliation_mismatches_total",
+        "leaderboard_rebuilds_total",
+        "rankings_import_rows_total",
+        "search_queries_total",
+        "search_timeouts_total",
+        "search_latency_seconds",
     ):
         assert name in body
     assert "# TYPE" in body  # exposition format, not JSON
@@ -116,6 +127,14 @@ _ALERT_FILES: dict[str, set[str]] = {
         "CacheBreakerOpen",
         "CacheDegraded",
         "CacheMissRatioHigh",
+    },
+    "ops/alerts/statistics_alerts.yml": {
+        "StatisticsRecomputeErrors",
+        "StatisticsWatermarkLagHigh",
+        "StandingsReconciliationMismatch",
+        "LeaderboardRebuildStorm",
+        "SearchTimeoutHigh",
+        "RankingsImportStalled",
     },
 }
 

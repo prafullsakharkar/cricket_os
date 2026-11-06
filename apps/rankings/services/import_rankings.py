@@ -27,6 +27,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date
 from typing import Any
 
+from apps.core import metrics
 from apps.providers.licensing import FEATURE_RANKINGS, check_license
 from apps.providers.registry import get_adapter
 from apps.rankings.models import PlayerRanking
@@ -144,6 +145,7 @@ def import_rankings(
         if player_id is None:
             _report_unresolved(row, provider=provider)
             summary["skipped_unresolved"] += 1
+            metrics.RANKINGS_IMPORT_ROWS.labels(status="skipped_unresolved").inc()
             continue
         created = _upsert_row(
             provider,
@@ -151,7 +153,9 @@ def import_rankings(
             row,
             gender=gender,
         )
-        summary["imported" if created else "updated"] += 1
+        status = "imported" if created else "updated"
+        summary[status] += 1
+        metrics.RANKINGS_IMPORT_ROWS.labels(status=status).inc()
     return summary
 
 
