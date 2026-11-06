@@ -128,8 +128,8 @@ behaviour, ARCHITECTURE wins on module boundaries.
 | 2 Recompute pipeline + sweep | done | 700baa6 |
 | 3 Standings + NRR | done | 196e1cc |
 | 4 Leaderboards/records/H2H/form/compare | done | 5a4a4aa |
-| 5 Rankings | done | — |
-| 6 Search | — | — |
+| 5 Rankings | done | 0707517 |
+| 6 Search | done | — |
 | 7 Read API | — | — |
 | 8 Endpoint coverage audit | — | — |
 | 9 Observability | — | — |
@@ -214,3 +214,24 @@ behaviour, ARCHITECTURE wins on module boundaries.
   - Test-isolation note: phase-d tests `clear_registry()` (wiping every
     adapter); the rankings suite re-registers the fixture adapter in an
     autouse fixture, matching the explicit-registration convention there.
+- **Group 6 rulings (implementation):**
+  - `apps.search` is a **service-only app** (no tables): it reads the domain
+    tables through their GIN trigram indexes. The `%` operator (index-backed)
+    is used exclusively — never `icontains`/LIKE — and the recall threshold is
+    the pg_trgm session default (0.3), matching the documented behaviour.
+  - Weighted ranking: `score = similarity * type_weight + exact(0.25)/prefix(0.1)
+    boost`; weights player 1.0 / team 0.95 / series 0.9 / competition 0.85.
+    Ties break by (type order, name) — deterministic.
+  - Safety: query length 2..100 (`ValueError` → `invalid_query`), per-statement
+    `SET LOCAL statement_timeout` (default 200 ms) around the whole search, and
+    a per-type candidate fetch (50) + merged `limit` cap (≤100).
+  - The EXPLAIN gate runs with `enable_seqscan=off` and asserts the plan names
+    `ix_player_name_trgm`/`ix_team_name_trgm` — the only way the planner can
+    satisfy `%` with seqscan disabled — rather than relying on planner choices
+    against live stats (the phase-c trigram test precedent).
+  - The golden relevance set reflects real trigram behaviour: a short query
+    that is only a fragment of a long name does not clear the 0.3 threshold
+    (verified against PG; "india" matches only the exact team). The corpus
+    asserts exact-team-beats-prefix-series and surname-prefix resolution.
+  - `/search` endpoint is Group 7 (Read API); Group 6 delivers the service,
+    safety, EXPLAIN gate and golden set it is built on.
