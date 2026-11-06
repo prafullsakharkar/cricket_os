@@ -126,7 +126,7 @@ behaviour, ARCHITECTURE wins on module boundaries.
 |---|---|---|
 | 1 Models + migrations | done | 5075536 |
 | 2 Recompute pipeline + sweep | done | 700baa6 |
-| 3 Standings + NRR | done | — |
+| 3 Standings + NRR | done | 196e1cc |
 | 4 Leaderboards/records/H2H/form/compare | — | — |
 | 5 Rankings | — | — |
 | 6 Search | — | — |
