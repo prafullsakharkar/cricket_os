@@ -1257,8 +1257,10 @@ CREATE TABLE cricket.fantasy_points_ledger (
 
 CREATE TABLE cricket.fantasy_point_adjustment (
   id uuid PRIMARY KEY, match_id uuid NOT NULL, player_id uuid NOT NULL,
-  delta numeric(8,2) NOT NULL, reason text NOT NULL, adjusted_by uuid,
-  created_at timestamptz NOT NULL DEFAULT now());
+  delta numeric(8,2) NOT NULL, reason text NOT NULL,
+  reference text NOT NULL, -- Phase H Task 5: mandatory external reference; a
+                           -- void entry's reference is the id it offsets.
+  adjusted_by uuid, created_at timestamptz NOT NULL DEFAULT now());
 
 -- Append-only enforcement (Phase H decision 1): UPDATE/DELETE raise for every
 -- role, including the table owner, so no DB role used by the application can

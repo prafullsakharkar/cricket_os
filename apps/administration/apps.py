@@ -21,6 +21,7 @@ class AdministrationConfig(AppConfig):
         from apps.core.events import (
             TOPIC_CORRECTION_REQUESTED,
             TOPIC_DUPLICATE_REVIEWED,
+            TOPIC_FANTASY_ADJUSTMENT,
             TOPIC_MATCH_REOPENED,
             TOPIC_PLAYER_MERGED,
             TOPIC_PROVIDER_MAP_VERIFIED,
@@ -32,4 +33,5 @@ class AdministrationConfig(AppConfig):
         subscribe(TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
         subscribe(TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
         subscribe(TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
+        subscribe(TOPIC_FANTASY_ADJUSTMENT, handlers.on_fantasy_adjustment)
         self._ready_done = True

@@ -15,6 +15,7 @@ from apps.administration.models import AuditLog
 from apps.core.events import (
     TOPIC_CORRECTION_REQUESTED,
     TOPIC_DUPLICATE_REVIEWED,
+    TOPIC_FANTASY_ADJUSTMENT,
     TOPIC_MATCH_REOPENED,
     TOPIC_PLAYER_MERGED,
     TOPIC_PROVIDER_MAP_VERIFIED,
@@ -85,9 +86,29 @@ def on_correction_requested(payload: Any) -> None:
     )
 
 
+def on_fantasy_adjustment(payload: Any) -> None:
+    """Audit a manual fantasy point adjustment (apply or void, Phase H Task 5)."""
+    AuditLog.objects.create(
+        action=payload.get("action", TOPIC_FANTASY_ADJUSTMENT),
+        entity_type="fantasy_point_adjustment",
+        entity_id=payload["adjustment_id"],
+        actor_id=payload.get("actor_id"),
+        actor_label=str(payload.get("actor_label")),
+        after={
+            "match_id": payload.get("match_id"),
+            "player_id": payload.get("player_id"),
+            "delta": payload.get("delta"),
+            "reason": payload.get("reason"),
+            "reference": payload.get("reference"),
+            "voids": payload.get("voids"),
+        },
+    )
+
+
 __all__ = [
     "on_correction_requested",
     "on_duplicate_reviewed",
+    "on_fantasy_adjustment",
     "on_match_reopened",
     "on_player_merged",
     "on_provider_map_verified",

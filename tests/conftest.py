@@ -155,6 +155,7 @@ def _isolate_event_subscriptions() -> Iterator[None]:
     events.subscribe(events.TOPIC_DUPLICATE_REVIEWED, handlers.on_duplicate_reviewed)
     events.subscribe(events.TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
     events.subscribe(events.TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
+    events.subscribe(events.TOPIC_FANTASY_ADJUSTMENT, handlers.on_fantasy_adjustment)
     # Phase E: cache invalidation subscribers live in core and are cleared by
     # ``clear_subscriptions`` above, so re-attach them for every test, and
     # reset the CDN purge hook (tests configure their own fake when needed).

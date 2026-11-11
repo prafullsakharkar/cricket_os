@@ -70,6 +70,7 @@ from apps.fantasy.models import (
     PlayerMatchPerformance,
 )
 from apps.fantasy.services import ledger
+from apps.fantasy.services.adjustments import adjustment_totals_by_player
 from apps.fantasy.services.snapshot import (
     build_snapshot,
     snapshot_from_payload,
@@ -235,9 +236,15 @@ def _upsert_performances(
     result: FantasyResult,
     audit: FantasyCalcAudit,
 ) -> None:
-    """Refresh the derived read model (bumped revision; stale rows removed)."""
+    """Refresh the derived read model (bumped revision; stale rows removed).
+
+    ``total_points`` = engine total + the net manual adjustment for the
+    (match, player) pair (Task 5): the adjustment component is a distinct
+    ``breakdown`` entry and survives recomputes untouched.
+    """
     now = timezone.now()
     playing_xi = {line.player_id: line.is_playing_xi for line in snapshot.player_lines}
+    adjustment_totals = adjustment_totals_by_player(match.id)
     for player in result.players:
         lookup: dict[str, Any] = {
             "match_id": match.id,
@@ -245,11 +252,15 @@ def _upsert_performances(
             "ruleset_version_id": version.id,
         }
         existing = PlayerMatchPerformance.objects.filter(**lookup).first()
+        adj_sum = adjustment_totals.get(player.player_id, Decimal("0.00"))
+        breakdown = {c.metric: str(c.points) for c in player.components}
+        if adj_sum:
+            breakdown["adjustments"] = str(adj_sum)
         PlayerMatchPerformance.objects.update_or_create(
             **lookup,
             defaults={
-                "total_points": player.total,
-                "breakdown": {c.metric: str(c.points) for c in player.components},
+                "total_points": player.total + adj_sum,
+                "breakdown": breakdown,
                 "is_playing_xi": playing_xi.get(player.player_id, True),
                 "revision": (existing.revision + 1) if existing else 1,
                 "computed_at": now,

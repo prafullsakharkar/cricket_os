@@ -269,13 +269,19 @@ class FantasyPointsLedger(UUIDPrimaryKeyModel):
 
 
 class FantasyPointAdjustment(UUIDPrimaryKeyModel):
-    """Append-only manual adjustment (data errors, steward-approved)."""
+    """Append-only manual adjustment (data errors, steward-approved).
+
+    ``reference`` (plan Task 5) is a mandatory external reference (ticket,
+    order or correction id) recorded with every adjustment; a void entry's
+    reference is the id of the adjustment it offsets.
+    """
 
     # Plain uuid cross-references per the §3.8 DDL (see FantasyCalcAudit).
     match_id = models.UUIDField()
     player_id = models.UUIDField()
     delta = models.DecimalField(max_digits=8, decimal_places=2)
     reason = models.TextField()
+    reference = models.TextField()
     adjusted_by = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 

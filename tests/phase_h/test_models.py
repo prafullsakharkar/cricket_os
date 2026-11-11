@@ -88,6 +88,7 @@ TABLES: dict[str, set[str]] = {
         "player_id",
         "delta",
         "reason",
+        "reference",
         "adjusted_by",
         "created_at",
     },

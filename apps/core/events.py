@@ -37,6 +37,11 @@ TOPIC_CORRECTION_APPLIED = "correction.applied"
 #: Tier-2 (Phase H): fantasy points were recomputed for a match (cache
 #: invalidation + audit). Payload: ``{"match_id", "calc_run_id"}``.
 TOPIC_FANTASY_COMPUTED = "fantasy.computed"
+#: Audit-worthy topic (Phase H): a manual point adjustment was applied/voided
+#: (synchronous, on_commit=False — the audit row commits with the change).
+#: Payload: ``{"action", "adjustment_id", "match_id", "player_id", "delta",
+#: "reason", "reference", "actor_id", "actor_label", "voids"}``.
+TOPIC_FANTASY_ADJUSTMENT = "fantasy.adjustment"
 #: Ingestion: an ImportJob completed (succeeded or partial); checkpoint advanced.
 TOPIC_INGESTION_COMPLETED = "ingestion.completed"
 #: Ingestion: an ImportJob failed permanently (a DLQ row was written).

@@ -151,6 +151,7 @@ _DEFAULTS: dict[str, Invalidator] = {
     events.TOPIC_STATS_UPDATED: _stats_updated,
     events.TOPIC_STANDINGS_UPDATED: _standings_updated,
     events.TOPIC_FANTASY_COMPUTED: _fantasy_computed,
+    events.TOPIC_FANTASY_ADJUSTMENT: _fantasy_computed,
 }
 
 
