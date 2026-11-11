@@ -59,3 +59,10 @@ idx|player_career_stat|CREATE UNIQUE INDEX ON cricket.player_career_stat USING b
 idx|player_career_stat|CREATE UNIQUE INDEX ON cricket.player_career_stat USING btree (player_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::text), gender)
 idx|team_stat|CREATE UNIQUE INDEX ON cricket.team_stat USING btree (team_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::cricket.format_type))
 idx|team_stat|CREATE UNIQUE INDEX ON cricket.team_stat USING btree (team_id, scope_type, COALESCE(scope_ref_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(format_type, 'OTHER'::text))
+#
+# Category 5 — Phase H ux_frv_default. Same enum-vs-text cast as Category 4:
+# the reference DDL declares `format_scope cricket.format_type` (enum), so the
+# partial-unique index expression renders `'OTHER'::cricket.format_type`;
+# Django stores the column as `text` and renders `'OTHER'::text`.
+idx|fantasy_ruleset_version|CREATE UNIQUE INDEX ON cricket.fantasy_ruleset_version USING btree (ruleset_id, COALESCE(format_scope, 'OTHER'::cricket.format_type)) WHERE is_default
+idx|fantasy_ruleset_version|CREATE UNIQUE INDEX ON cricket.fantasy_ruleset_version USING btree (ruleset_id, COALESCE(format_scope, 'OTHER'::text)) WHERE is_default

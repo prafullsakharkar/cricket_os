@@ -6,6 +6,8 @@
 # level only (partition children are excluded by schema_manifest.sql).
 # Phase F: the aggregate/standings/rankings tables + recompute watermark
 # (DATABASE_SCHEMA §3.7).
+# Phase H: the fantasy ruleset/version/point-rule/performance/ledger/
+# adjustment/calc-audit tables (DATABASE_SCHEMA §3.8).
 country
 governing_body
 venue
@@ -56,3 +58,10 @@ leaderboard
 form_trend
 tournament_standings
 statistics_watermark
+fantasy_ruleset
+fantasy_ruleset_version
+fantasy_point_rule
+player_match_performance
+fantasy_points_ledger
+fantasy_point_adjustment
+fantasy_calc_audit

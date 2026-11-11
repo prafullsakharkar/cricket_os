@@ -53,6 +53,13 @@ env = environ.Env(
     LIVE_BREAKER_RECOVERY_SECONDS=(int, 60),
     LIVE_BREAKER_SUCCESS_THRESHOLD=(int, 2),
     LIVE_PUSH_REPLAY_WINDOW_SECONDS=(int, 300),
+    # Phase H fantasy flags (product/legal gate: FANTASY_PRODUCT_DECISION.md is
+    # ABSENT, so the public API is off by default and every ruleset ships DRAFT).
+    FANTASY_PUBLIC_API_ENABLED=(bool, False),
+    FANTASY_PROVISIONAL_ENABLED=(bool, False),
+    FANTASY_PROVISIONAL_INTERVAL_SECONDS=(int, 60),
+    FANTASY_DEFAULT_AUTO_RECOMPUTE=(bool, True),
+    FANTASY_ENGINE_VERSION=(str, "1.0.0"),
     DJANGO_ENVIRONMENT=(str, "dev"),
 )
 
@@ -103,6 +110,26 @@ LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
 # Deployment environment name ("dev"/"test"/"prod"). The ReplayAdapter is
 # hard-gated to non-prod (see apps.providers.adapters.replay).
 ENVIRONMENT = env("DJANGO_ENVIRONMENT")
+
+# --------------------------------------------------------------------------- #
+# Phase H — fantasy flags (docs/FANTASY.md documents each one)
+# --------------------------------------------------------------------------- #
+# Public fantasy read endpoints (FANTASY_PUBLIC_API_ENABLED). OFF by default:
+# the product/legal gate (docs/FANTASY_PRODUCT_DECISION.md) is ABSENT, so no
+# fantasy points may be exposed publicly until product+legal sign off. When
+# False the three fantasy routes are not registered (404), mirroring the
+# ENABLE_METRICS_ENDPOINT precedent.
+FANTASY_PUBLIC_API_ENABLED = env("FANTASY_PUBLIC_API_ENABLED")
+# Provisional (live-ish) fantasy points: OFF by default. When enabled, a
+# throttled time-based task computes points from current Tier-1 rows, labelled
+# provisional, never persisted as final, superseded by final results.
+FANTASY_PROVISIONAL_ENABLED = env("FANTASY_PROVISIONAL_ENABLED")
+FANTASY_PROVISIONAL_INTERVAL_SECONDS = env("FANTASY_PROVISIONAL_INTERVAL_SECONDS")
+# Whether a freshly frozen version is auto-recomputed for its format's matches
+# (final pipeline). Default True.
+FANTASY_DEFAULT_AUTO_RECOMPUTE = env("FANTASY_DEFAULT_AUTO_RECOMPUTE")
+# Version string stamped on every fantasy_calc_audit row.
+FANTASY_ENGINE_VERSION = env("FANTASY_ENGINE_VERSION")
 
 # --------------------------------------------------------------------------- #
 # Licensing policy (SECURITY §11: configuration, not code)
@@ -184,6 +211,7 @@ LOCAL_APPS = [
     "apps.synchronization",
     "apps.live",
     "apps.realtime",
+    "apps.fantasy",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

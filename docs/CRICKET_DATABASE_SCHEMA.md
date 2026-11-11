@@ -1192,6 +1192,15 @@ CREATE TABLE cricket.statistics_watermark (
 ### 3.8 Fantasy, provider & operations tables (DDL)
 
 ```sql
+-- Phase H (optional fantasy statistics). The base tables match DOMAIN_MODEL §5;
+-- the extra columns are the Phase H decisions recorded in the roadmap (status/
+-- content_hash/frozen_at/frozen_by/is_default/auto_recompute on the version;
+-- is_current/superseded_by on the ledger; calc_run_id/unsupported_rules/
+-- is_partial on player_match_performance; snapshot/snapshot_digest/trigger/
+-- is_provisional/timings on fantasy_calc_audit). Frozen versions and their
+-- rules, and the ledger/adjustment/calc-audit rows, are immutable: the
+-- triggers below raise for every role (Phase G will add REVOKE-based role
+-- enforcement; until then the trigger is the guarantee).
 CREATE TABLE cricket.fantasy_ruleset (
   id uuid PRIMARY KEY, name text NOT NULL, provider_scope text, description text,
   is_active boolean NOT NULL DEFAULT true, created_by uuid);
@@ -1200,7 +1209,12 @@ CREATE TABLE cricket.fantasy_ruleset_version (
   id uuid PRIMARY KEY, ruleset_id uuid NOT NULL REFERENCES cricket.fantasy_ruleset(id),
   version integer NOT NULL, effective_from timestamptz NOT NULL, effective_to timestamptz,
   format_scope cricket.format_type, is_frozen boolean NOT NULL DEFAULT false,
+  status text NOT NULL DEFAULT 'draft', content_hash text, frozen_at timestamptz,
+  frozen_by uuid, is_default boolean NOT NULL DEFAULT false,
+  auto_recompute boolean NOT NULL DEFAULT false,
   CONSTRAINT ux_frv UNIQUE (ruleset_id, version));
+CREATE UNIQUE INDEX ux_frv_default ON cricket.fantasy_ruleset_version
+  (ruleset_id, coalesce(format_scope,'OTHER')) WHERE is_default;
 
 CREATE TABLE cricket.fantasy_point_rule (
   id uuid PRIMARY KEY,
@@ -1211,6 +1225,13 @@ CREATE TABLE cricket.fantasy_point_rule (
 CREATE UNIQUE INDEX ux_fpr ON cricket.fantasy_point_rule
   (ruleset_version_id, coalesce(role_scope,'any'), event_type, condition_hash);
 
+CREATE TABLE cricket.fantasy_calc_audit (
+  id uuid PRIMARY KEY, match_id uuid NOT NULL, ruleset_version_id uuid NOT NULL,
+  input_digest text NOT NULL, output_digest text NOT NULL, engine_version text NOT NULL,
+  notes text, computed_at timestamptz NOT NULL DEFAULT now(),
+  snapshot bytea, snapshot_digest text, trigger text,
+  is_provisional boolean NOT NULL DEFAULT false, timings jsonb);
+
 CREATE TABLE cricket.player_match_performance (
   id uuid PRIMARY KEY, match_id uuid NOT NULL REFERENCES cricket.match(id),
   player_id uuid NOT NULL REFERENCES cricket.player(id),
@@ -1218,22 +1239,84 @@ CREATE TABLE cricket.player_match_performance (
   total_points numeric(8,2) NOT NULL DEFAULT 0, breakdown jsonb,
   is_playing_xi boolean NOT NULL DEFAULT true, revision integer NOT NULL DEFAULT 1,
   computed_at timestamptz NOT NULL DEFAULT now(),
+  calc_run_id uuid REFERENCES cricket.fantasy_calc_audit(id),
+  unsupported_rules jsonb NOT NULL DEFAULT '[]'::jsonb,
+  is_partial boolean NOT NULL DEFAULT false,
   CONSTRAINT ux_pmp UNIQUE (match_id, player_id, ruleset_version_id));
 
 CREATE TABLE cricket.fantasy_points_ledger (
   id uuid PRIMARY KEY, match_id uuid NOT NULL, player_id uuid NOT NULL,
   ruleset_version_id uuid NOT NULL, delta numeric(8,2) NOT NULL,
-  event_type text, reason text, created_at timestamptz NOT NULL DEFAULT now(), created_by uuid);
+  event_type text, reason text, created_at timestamptz NOT NULL DEFAULT now(), created_by uuid,
+  is_current boolean NOT NULL DEFAULT true,
+  superseded_by uuid REFERENCES cricket.fantasy_points_ledger(id));
 
 CREATE TABLE cricket.fantasy_point_adjustment (
   id uuid PRIMARY KEY, match_id uuid NOT NULL, player_id uuid NOT NULL,
   delta numeric(8,2) NOT NULL, reason text NOT NULL, adjusted_by uuid,
   created_at timestamptz NOT NULL DEFAULT now());
 
-CREATE TABLE cricket.fantasy_calc_audit (
-  id uuid PRIMARY KEY, match_id uuid NOT NULL, ruleset_version_id uuid NOT NULL,
-  input_digest text NOT NULL, output_digest text NOT NULL, engine_version text NOT NULL,
-  notes text, computed_at timestamptz NOT NULL DEFAULT now());
+-- Append-only enforcement (Phase H decision 1): UPDATE/DELETE raise for every
+-- role, including the table owner, so no DB role used by the application can
+-- mutate the ledger/adjustment/calc-audit history.
+CREATE FUNCTION cricket.block_ledger_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'fantasy_points_ledger is append-only: updates and deletes are forbidden';
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_ledger_append_only
+  BEFORE UPDATE OR DELETE ON cricket.fantasy_points_ledger
+  FOR EACH ROW EXECUTE FUNCTION cricket.block_ledger_mutation();
+
+CREATE FUNCTION cricket.block_adjustment_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'fantasy_point_adjustment is append-only: updates and deletes are forbidden';
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_adjustment_append_only
+  BEFORE UPDATE OR DELETE ON cricket.fantasy_point_adjustment
+  FOR EACH ROW EXECUTE FUNCTION cricket.block_adjustment_mutation();
+
+CREATE FUNCTION cricket.block_calc_audit_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'fantasy_calc_audit is append-only: updates and deletes are forbidden';
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_calc_audit_append_only
+  BEFORE UPDATE OR DELETE ON cricket.fantasy_calc_audit
+  FOR EACH ROW EXECUTE FUNCTION cricket.block_calc_audit_mutation();
+
+-- Frozen-version immutability: no UPDATE/DELETE of a frozen version and no
+-- INSERT/UPDATE/DELETE of its rules (changing rules means a new version).
+CREATE FUNCTION cricket.block_frozen_version_mutation() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.is_frozen THEN
+    RAISE EXCEPTION 'fantasy_ruleset_version % is frozen and immutable', OLD.id;
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_version_frozen_immutable
+  BEFORE UPDATE OR DELETE ON cricket.fantasy_ruleset_version
+  FOR EACH ROW EXECUTE FUNCTION cricket.block_frozen_version_mutation();
+
+CREATE FUNCTION cricket.block_frozen_rule_mutation() RETURNS trigger AS $$
+DECLARE
+  v_frozen boolean;
+BEGIN
+  SELECT is_frozen INTO v_frozen
+  FROM cricket.fantasy_ruleset_version
+  WHERE id = COALESCE(NEW.ruleset_version_id, OLD.ruleset_version_id);
+  IF v_frozen THEN
+    RAISE EXCEPTION 'point rules of frozen ruleset version % are immutable',
+      COALESCE(NEW.ruleset_version_id, OLD.ruleset_version_id);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_point_rule_frozen_immutable
+  BEFORE INSERT OR UPDATE OR DELETE ON cricket.fantasy_point_rule
+  FOR EACH ROW EXECUTE FUNCTION cricket.block_frozen_rule_mutation();
 
 CREATE TABLE cricket.data_provider (
   id uuid PRIMARY KEY, name text NOT NULL, code text NOT NULL UNIQUE, base_url text,

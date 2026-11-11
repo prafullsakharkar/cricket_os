@@ -34,6 +34,9 @@ TOPIC_SCORECARD_UPDATED = "scorecard.updated"
 TOPIC_MATCH_COMPLETED = "match.completed"
 #: Tier-2: a data correction was applied to a completed match.
 TOPIC_CORRECTION_APPLIED = "correction.applied"
+#: Tier-2 (Phase H): fantasy points were recomputed for a match (cache
+#: invalidation + audit). Payload: ``{"match_id", "calc_run_id"}``.
+TOPIC_FANTASY_COMPUTED = "fantasy.computed"
 #: Ingestion: an ImportJob completed (succeeded or partial); checkpoint advanced.
 TOPIC_INGESTION_COMPLETED = "ingestion.completed"
 #: Ingestion: an ImportJob failed permanently (a DLQ row was written).
