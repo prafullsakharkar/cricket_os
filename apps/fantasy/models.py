@@ -152,6 +152,11 @@ class FantasyCalcAudit(UUIDPrimaryKeyModel):
     #: Digest of the computed fantasy result.
     output_digest = models.TextField()
     engine_version = models.TextField()
+    #: Canonical content hash of the ruleset version at calc time (==
+    #: ``engine.content_hash(ruleset_spec_for(version))``). The idempotency
+    #: check compares input_digest + version_hash so a ruleset change (new
+    #: version) always triggers a recompute even when the snapshot is the same.
+    version_hash = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
     computed_at = models.DateTimeField(default=timezone.now)
     #: Compressed canonical snapshot JSON (Task 3), so a recomputation is
@@ -237,9 +242,14 @@ class FantasyPointsLedger(UUIDPrimaryKeyModel):
     reason = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     created_by = models.UUIDField(null=True, blank=True)
-    #: Append-only supersession: exactly one current row per
-    #: (match, player, version) after a recompute; the previous current rows
-    #: are flipped to is_current=False and linked to the row that replaced them.
+    #: The calc run that produced this row (plain uuid — see FantasyCalcAudit).
+    #: Because the ledger is append-only (UPDATE is blocked for every role),
+    #: "current" points for (match, version) are *derived*: the rows whose
+    #: ``calc_run_id`` is the latest ``fantasy_calc_audit`` row for that
+    #: (match, version). ``is_current``/``superseded_by`` remain the DDL's
+    #: informational columns (every appended row keeps is_current=true; rows
+    #: are never mutated).
+    calc_run_id = models.UUIDField(null=True, blank=True)
     is_current = models.BooleanField(default=True)
     superseded_by = models.ForeignKey(
         "self",

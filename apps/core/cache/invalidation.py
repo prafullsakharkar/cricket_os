@@ -123,6 +123,15 @@ def _standings_updated(payload: Mapping[str, Any]) -> set[str]:
     return namespaces
 
 
+def _fantasy_computed(payload: Mapping[str, Any]) -> set[str]:
+    """Fantasy points changed: bump the whole fantasy namespace + the match."""
+    namespaces = {"fantasy"}
+    value = payload.get("match_id")
+    if value:
+        namespaces.add(f"fantasy:match:{value}")
+    return namespaces
+
+
 _DEFAULTS: dict[str, Invalidator] = {
     events.TOPIC_DELIVERY_APPENDED: _match_live,
     events.TOPIC_DELIVERY_CORRECTED: _match_live,
@@ -141,6 +150,7 @@ _DEFAULTS: dict[str, Invalidator] = {
     events.TOPIC_COMPETITION_UPDATED: _competition,
     events.TOPIC_STATS_UPDATED: _stats_updated,
     events.TOPIC_STANDINGS_UPDATED: _standings_updated,
+    events.TOPIC_FANTASY_COMPUTED: _fantasy_computed,
 }
 
 

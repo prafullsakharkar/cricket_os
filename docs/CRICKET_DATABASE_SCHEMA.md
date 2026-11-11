@@ -1195,12 +1195,15 @@ CREATE TABLE cricket.statistics_watermark (
 -- Phase H (optional fantasy statistics). The base tables match DOMAIN_MODEL §5;
 -- the extra columns are the Phase H decisions recorded in the roadmap (status/
 -- content_hash/frozen_at/frozen_by/is_default/auto_recompute on the version;
--- is_current/superseded_by on the ledger; calc_run_id/unsupported_rules/
--- is_partial on player_match_performance; snapshot/snapshot_digest/trigger/
--- is_provisional/timings on fantasy_calc_audit). Frozen versions and their
--- rules, and the ledger/adjustment/calc-audit rows, are immutable: the
--- triggers below raise for every role (Phase G will add REVOKE-based role
--- enforcement; until then the trigger is the guarantee).
+-- calc_run_id on the ledger (current rows are DERIVED from the latest
+-- fantasy_calc_audit row for a match+version, because the append-only trigger
+-- forbids flipping is_current; is_current/superseded_by stay informational);
+-- calc_run_id/unsupported_rules/is_partial on player_match_performance;
+-- snapshot/snapshot_digest/trigger/is_provisional/timings/version_hash on
+-- fantasy_calc_audit). Frozen versions and their rules, and the
+-- ledger/adjustment/calc-audit rows, are immutable: the triggers below raise
+-- for every role (Phase G will add REVOKE-based role enforcement; until then
+-- the trigger is the guarantee).
 CREATE TABLE cricket.fantasy_ruleset (
   id uuid PRIMARY KEY, name text NOT NULL, provider_scope text, description text,
   is_active boolean NOT NULL DEFAULT true, created_by uuid);
@@ -1229,7 +1232,7 @@ CREATE UNIQUE INDEX ux_fpr ON cricket.fantasy_point_rule
 CREATE TABLE cricket.fantasy_calc_audit (
   id uuid PRIMARY KEY, match_id uuid NOT NULL, ruleset_version_id uuid NOT NULL,
   input_digest text NOT NULL, output_digest text NOT NULL, engine_version text NOT NULL,
-  notes text, computed_at timestamptz NOT NULL DEFAULT now(),
+  version_hash text, notes text, computed_at timestamptz NOT NULL DEFAULT now(),
   snapshot bytea, snapshot_digest text, trigger text,
   is_provisional boolean NOT NULL DEFAULT false, timings jsonb);
 
@@ -1249,7 +1252,7 @@ CREATE TABLE cricket.fantasy_points_ledger (
   id uuid PRIMARY KEY, match_id uuid NOT NULL, player_id uuid NOT NULL,
   ruleset_version_id uuid NOT NULL, delta numeric(8,2) NOT NULL,
   event_type text, reason text, created_at timestamptz NOT NULL DEFAULT now(), created_by uuid,
-  is_current boolean NOT NULL DEFAULT true,
+  calc_run_id uuid, is_current boolean NOT NULL DEFAULT true,
   superseded_by uuid REFERENCES cricket.fantasy_points_ledger(id));
 
 CREATE TABLE cricket.fantasy_point_adjustment (

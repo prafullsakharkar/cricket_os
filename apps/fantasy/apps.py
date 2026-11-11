@@ -13,9 +13,12 @@ class FantasyConfig(AppConfig):
 
     def ready(self) -> None:
         # Tier-2 pipeline wiring (match.completed / correction.applied →
-        # recompute; player.merged → supersede + recompute) is added here in
-        # Task 4 when apps/fantasy/services/recompute.py exists. Guarded so
-        # repeated ready() calls (tests) do not double-register.
+        # recompute; player.merged → recompute the winner). Registered after
+        # the statistics module's handlers (INSTALLED_APPS order) so
+        # per-match stats and aggregates exist before fantasy computes.
         if getattr(self, "_ready_done", False):
             return
+        from apps.fantasy.services.recompute import register as recompute_register
+
+        recompute_register()
         self._ready_done = True

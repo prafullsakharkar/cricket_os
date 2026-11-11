@@ -391,6 +391,12 @@ CELERY_TASK_ANNOTATIONS = {
     }
 }
 
+# Phase H (Task 4): heavy fantasy recomputes run on the tier2 queue, away from
+# the live request path (per-delivery events never trigger fantasy recomputes).
+CELERY_TASK_ROUTES = {
+    "apps.fantasy.recompute_match": {"queue": "tier2"},
+}
+
 # --------------------------------------------------------------------------- #
 # DRF — JSON only, custom envelope + error handler, throttling, allow-lists
 # --------------------------------------------------------------------------- #

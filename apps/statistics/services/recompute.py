@@ -978,6 +978,12 @@ def sweep_stale_statistics() -> int:
     for match, correction in stale:
         recompute_match(match, correction=correction)
         healed += 1
+    # Phase H (Task 4): the fantasy calc trail rides the same sweep — a match
+    # whose canonical rows changed behind the pipeline's back (or whose fantasy
+    # recompute crashed) is healed here too.
+    from apps.fantasy.services.recompute import sweep_stale_fantasy
+
+    healed += sweep_stale_fantasy()
     return healed
 
 
