@@ -202,8 +202,43 @@ source_modules = [
   "apps.rankings",
   "apps.search",
   "apps.synchronization",
+  "apps.fantasy",
 ]
 forbidden_modules = ["apps.administration", "apps.ingestion", "apps.realtime"]
+
+# Phase H (Task 2): the fantasy engine is stdlib-only — the same purity
+# contract as scoring, and stronger: it must not even import ``apps.core``
+# (whose enums import Django). No Django, no ORM, no other first-party module.
+[[tool.importlinter.contracts]]
+name = "fantasy engine is stdlib-only (imports no first-party package)"
+type = "forbidden"
+source_modules = ["apps.fantasy.engine"]
+forbidden_modules = [
+  "apps.core",
+  "apps.venues",
+  "apps.teams",
+  "apps.players",
+  "apps.competitions",
+  "apps.providers",
+  "apps.matches",
+  "apps.innings",
+  "apps.deliveries",
+  "apps.scorecards",
+  "apps.statistics",
+  "apps.rankings",
+  "apps.scoring",
+  "apps.fantasy.models",
+  "apps.fantasy.services",
+  "apps.fantasy.api",
+  "apps.fantasy.selectors",
+  "apps.fantasy.admin",
+  "apps.ingestion",
+  "apps.synchronization",
+  "apps.live",
+  "apps.realtime",
+  "apps.administration",
+  "apps.search",
+]
 
 # Phase C: the delivery write path must never write derived scorecard rows
 # directly — that is the scorecards module's job (ARCHITECTURE §3).

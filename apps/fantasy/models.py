@@ -87,6 +87,12 @@ class FantasyRulesetVersion(UUIDPrimaryKeyModel):
     #: Whether the pipeline recomputes this version's points automatically for
     #: terminal matches (set by authoring from FANTASY_DEFAULT_AUTO_RECOMPUTE).
     auto_recompute = models.BooleanField(default=False)
+    #: Per-ruleset policy flags (Task 2 engine ``RulesetPolicies``): super_over
+    #: exclude|include, abandoned no_points|compute, reduced_overs
+    #: compute|exclude, retirement_hurt not_out|count_as_out, substitutes
+    #: exclude|include. Stored as a JSON object keyed by flag name; the engine
+    #: validates the values. The flags are part of the frozen content hash.
+    policies = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "fantasy_ruleset_version"

@@ -1212,6 +1212,7 @@ CREATE TABLE cricket.fantasy_ruleset_version (
   status text NOT NULL DEFAULT 'draft', content_hash text, frozen_at timestamptz,
   frozen_by uuid, is_default boolean NOT NULL DEFAULT false,
   auto_recompute boolean NOT NULL DEFAULT false,
+  policies jsonb NOT NULL DEFAULT '{}'::jsonb,
   CONSTRAINT ux_frv UNIQUE (ruleset_id, version));
 CREATE UNIQUE INDEX ux_frv_default ON cricket.fantasy_ruleset_version
   (ruleset_id, coalesce(format_scope,'OTHER')) WHERE is_default;

@@ -42,6 +42,7 @@ TABLES: dict[str, set[str]] = {
         "frozen_by",
         "is_default",
         "auto_recompute",
+        "policies",
     },
     "fantasy_point_rule": {
         "id",
@@ -268,6 +269,22 @@ def test_version_defaults_are_draft_and_unfrozen() -> None:
     assert version.is_default is False
     assert version.auto_recompute is False
     assert version.content_hash is None
+    assert version.policies == {}
+
+
+def test_version_policies_round_trip() -> None:
+    """Policies persist as a JSON object and default to the engine defaults."""
+    from apps.fantasy.models import FantasyRuleset, FantasyRulesetVersion
+
+    ruleset = FantasyRuleset.objects.create(name="test", provider_scope="generic")
+    version = FantasyRulesetVersion.objects.create(
+        ruleset=ruleset,
+        version=1,
+        effective_from="2026-01-01T00:00:00Z",
+        policies={"super_over": "include", "abandoned": "compute"},
+    )
+    version.refresh_from_db()
+    assert version.policies == {"super_over": "include", "abandoned": "compute"}
 
 
 def test_fantasy_tables_reverse_cleanly() -> None:
