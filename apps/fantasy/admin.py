@@ -16,6 +16,8 @@ from django.contrib.admin.options import ActionLocation
 from django.http import HttpResponse
 from django.shortcuts import render
 
+from apps.fantasy import authoring
+from apps.fantasy.forms import DryRunVersionForm
 from apps.fantasy.models import (
     FantasyCalcAudit,
     FantasyPointAdjustment,
@@ -28,6 +30,13 @@ from apps.fantasy.models import (
 from apps.fantasy.services.adjustments import ADJUSTMENT_ROLES, apply_adjustment
 
 ADJUSTMENT_TEMPLATE = "admin/fantasy/adjustment_confirm.html"
+VERSION_ACTION_TEMPLATE = "admin/fantasy/version_action_confirm.html"
+DRY_RUN_TEMPLATE = "admin/fantasy/dry_run.html"
+
+#: Lifecycle actions that mutate a version require the admin role.
+ADMIN_ONLY_ACTIONS = frozenset(
+    {"freeze_version_action", "set_default_version_action", "retire_version_action"}
+)
 
 # Ledger/adjustment/calc-audit are append-only: the DB triggers already block
 # UPDATE/DELETE; the admin must not offer add/edit/delete either.
@@ -127,11 +136,201 @@ class FantasyRulesetAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_filter = ("is_active",)
 
 
+def _version_confirm(
+    modeladmin: Any,
+    request: Any,
+    queryset: Any,
+    *,
+    title: str,
+    description: str,
+    action: str,
+    action_label: str,
+) -> HttpResponse:
+    """Render the intermediate confirm page for a single-version lifecycle action."""
+    rows = [
+        {
+            "version": version,
+            "status": version.status,
+            "rules": version.point_rules.count(),
+        }
+        for version in queryset
+    ]
+    return render(
+        request,
+        VERSION_ACTION_TEMPLATE,
+        {
+            "title": title,
+            "description": description,
+            "rows": rows,
+            "queryset": queryset,
+            "action": action,
+            "action_label": action_label,
+        },
+    )
+
+
+@admin.action(description="Validate the selected versions against the engine")
+def validate_version_action(modeladmin: Any, request: Any, queryset: Any) -> HttpResponse | None:
+    """Rebuild each version's engine spec and validate it (read-only)."""
+    for version in queryset:
+        try:
+            spec = authoring.validate_version(version)
+        except ValueError as exc:
+            modeladmin.message_user(request, f"{version} INVALID: {exc}", level=messages.ERROR)
+            continue
+        modeladmin.message_user(
+            request, f"{version} OK ({len(spec.rules)} rule(s), {version.status})"
+        )
+    return None
+
+
+@admin.action(description="Dry-run the selected versions against a match")
+def dry_run_version_action(modeladmin: Any, request: Any, queryset: Any) -> HttpResponse | None:
+    """Compute a version against a chosen completed match (writes nothing)."""
+    if "confirm" not in request.POST:
+        form = DryRunVersionForm()
+        return render(
+            request,
+            DRY_RUN_TEMPLATE,
+            {
+                "title": "Dry-run a version",
+                "form": form,
+                "queryset": queryset,
+                "action": "dry_run_version_action",
+            },
+        )
+    form = DryRunVersionForm(request.POST)
+    version = queryset.first()
+    if not form.is_valid() or version is None:
+        modeladmin.message_user(
+            request, "pick a version and a completed match", level=messages.ERROR
+        )
+        return None
+    match = form.cleaned_data["match"]
+    against = form.cleaned_data.get("against")
+    try:
+        result = authoring.dry_run_version(version, match, against=against)
+    except ValueError as exc:
+        modeladmin.message_user(request, f"{version} dry-run failed: {exc}", level=messages.ERROR)
+        return None
+    return render(
+        request,
+        DRY_RUN_TEMPLATE,
+        {
+            "title": f"Dry-run of {version} on {match}",
+            "result": result,
+            "queryset": queryset,
+            "action": "dry_run_version_action",
+        },
+    )
+
+
+@admin.action(description="Freeze the selected versions (irreversible)")
+def freeze_version_action(modeladmin: Any, request: Any, queryset: Any) -> HttpResponse | None:
+    """Freeze a draft version: records content_hash, locks it forever."""
+    if "confirm" not in request.POST:
+        return _version_confirm(
+            modeladmin,
+            request,
+            queryset,
+            title="Freeze version(s)",
+            description=(
+                "irreversibly freeze the selected draft versions: the engine "
+                "content hash is recorded and the version + its rules become immutable"
+            ),
+            action="freeze_version_action",
+            action_label="Freeze",
+        )
+    frozen = 0
+    for version in queryset:
+        try:
+            authoring.freeze_version(version, actor=request.user)
+            frozen += 1
+        except (PermissionError, ValueError) as exc:
+            modeladmin.message_user(request, f"{version}: {exc}", level=messages.ERROR)
+    modeladmin.message_user(request, f"Frozen {frozen} version(s).")
+    return None
+
+
+@admin.action(description="Set the selected versions as the default")
+def set_default_version_action(modeladmin: Any, request: Any, queryset: Any) -> HttpResponse | None:
+    """Mark a draft version as the default for its (ruleset, format)."""
+    if "confirm" not in request.POST:
+        return _version_confirm(
+            modeladmin,
+            request,
+            queryset,
+            title="Set default version",
+            description=(
+                "mark the selected version as the default for its ruleset and "
+                "format. The default must be chosen before freezing (frozen "
+                "versions are immutable); at most one default per (ruleset, format)"
+            ),
+            action="set_default_version_action",
+            action_label="Set default",
+        )
+    set_default = 0
+    for version in queryset:
+        try:
+            authoring.set_default_version(version, actor=request.user)
+            set_default += 1
+        except (PermissionError, ValueError) as exc:
+            modeladmin.message_user(request, f"{version}: {exc}", level=messages.ERROR)
+    modeladmin.message_user(request, f"Set {set_default} default version(s).")
+    return None
+
+
+@admin.action(description="Retire the selected versions (fork a new draft)")
+def retire_version_action(modeladmin: Any, request: Any, queryset: Any) -> HttpResponse | None:
+    """Fork a fresh draft from each selected version (never mutating it)."""
+    if "confirm" not in request.POST:
+        return _version_confirm(
+            modeladmin,
+            request,
+            queryset,
+            title="Retire version(s)",
+            description=(
+                "fork a new draft version from each selected version (same rules "
+                "and policies, next version number). The original is never edited"
+            ),
+            action="retire_version_action",
+            action_label="Retire / fork",
+        )
+    forked = 0
+    for version in queryset:
+        try:
+            authoring.retire_version(version, actor=request.user)
+            forked += 1
+        except (PermissionError, ValueError) as exc:
+            modeladmin.message_user(request, f"{version}: {exc}", level=messages.ERROR)
+    modeladmin.message_user(request, f"Forked {forked} new draft version(s).")
+    return None
+
+
 @admin.register(FantasyRulesetVersion)
 class FantasyRulesetVersionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("ruleset", "version", "status", "format_scope", "is_default", "auto_recompute")
     list_filter = ("status", "format_scope", "is_default")
     readonly_fields = ("content_hash", "frozen_at", "frozen_by")
+    actions = (
+        validate_version_action,
+        dry_run_version_action,
+        freeze_version_action,
+        set_default_version_action,
+        retire_version_action,
+    )
+
+    def get_actions(
+        self, request: Any, action_location: Any = ActionLocation.CHANGE_LIST
+    ) -> dict[str, Any]:
+        actions = super().get_actions(request, action_location=action_location)
+        if not (
+            request.user.is_superuser
+            or request.user.groups.filter(name__in=authoring.AUTHORING_ADMIN_ROLES).exists()
+        ):
+            for name in ADMIN_ONLY_ACTIONS:
+                actions.pop(name, None)
+        return actions
 
 
 @admin.register(FantasyPointRule)
@@ -250,4 +449,9 @@ __all__ = [
     "FantasyRulesetVersionAdmin",
     "PlayerMatchPerformanceAdmin",
     "apply_adjustment_action",
+    "dry_run_version_action",
+    "freeze_version_action",
+    "retire_version_action",
+    "set_default_version_action",
+    "validate_version_action",
 ]
