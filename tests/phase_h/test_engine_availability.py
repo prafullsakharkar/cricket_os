@@ -76,24 +76,73 @@ def test_dismissal_metrics_skipped_without_dismissal_kinds() -> None:
     assert result.is_partial is True
 
 
-def test_fielder_credit_metrics_skipped_without_credit_types() -> None:
-    no_credit = SnapshotCoverage(has_ball_data=True, has_fielder_credit_types=False)
+def test_fielding_metrics_skipped_without_fielding_data() -> None:
+    """Flat fielding metrics need the match's fielding counts (never guess 0)."""
+    no_fielding = SnapshotCoverage(
+        has_ball_data=True, has_dismissal_kinds=True, has_fielding_data=False
+    )
     ruleset = _ruleset(
-        point_rule("run_out_direct", "per_unit", "12.00", "fielding"),
+        point_rule("catch", "per_unit", "8.00", "fielding"),
+        point_rule("stumping", "per_unit", "10.00", "fielding"),
         point_rule("run_out", "per_unit", "6.00", "fielding"),
     )
+    result = compute(
+        ruleset,
+        _snapshot(
+            no_fielding,
+            PlayerLine(player_id="a", catches=1, stumpings=1, run_outs_total=1),
+        ),
+    )
+    assert "catch" in result.unsupported_rules
+    assert "stumping" in result.unsupported_rules
+    assert "run_out" in result.unsupported_rules
+    assert result.is_partial is True
+    assert _by_id(result, "a").total == Decimal("0.00")
+
+
+def test_run_out_direct_requires_fielding_data_and_credit_types() -> None:
+    """run_out_direct/indirect additionally need direct-vs-relay attribution."""
+    no_credit = SnapshotCoverage(
+        has_ball_data=True,
+        has_dismissal_kinds=True,
+        has_fielding_data=True,
+        has_fielder_credit_types=False,
+    )
+    ruleset = _ruleset(point_rule("run_out_direct", "per_unit", "12.00", "fielding"))
     result = compute(
         ruleset,
         _snapshot(no_credit, PlayerLine(player_id="a", run_outs_total=1, run_outs_direct=1)),
     )
     assert "run_out_direct" in result.unsupported_rules
-    assert "run_out" not in result.unsupported_rules  # flat run-out always available
-    assert _by_id(result, "a").total == Decimal("6.00")
+
+
+def test_fielding_metrics_computed_with_fielding_data() -> None:
+    fielding = SnapshotCoverage(
+        has_ball_data=True,
+        has_dismissal_kinds=True,
+        has_fielding_data=True,
+        has_fielder_credit_types=True,
+    )
+    ruleset = _ruleset(
+        point_rule("catch", "per_unit", "8.00", "fielding"),
+        point_rule("run_out_direct", "per_unit", "12.00", "fielding"),
+    )
+    result = compute(
+        ruleset,
+        _snapshot(
+            fielding, PlayerLine(player_id="a", catches=2, run_outs_direct=1, run_outs_total=1)
+        ),
+    )
+    assert result.unsupported_rules == ()
+    assert _by_id(result, "a").total == Decimal("28.00")  # 16 + 12
 
 
 def test_full_coverage_supports_every_metric() -> None:
     full = SnapshotCoverage(
-        has_ball_data=True, has_dismissal_kinds=True, has_fielder_credit_types=True
+        has_ball_data=True,
+        has_dismissal_kinds=True,
+        has_fielding_data=True,
+        has_fielder_credit_types=True,
     )
     line = PlayerLine(
         player_id="a",
@@ -201,26 +250,33 @@ def test_registry_declares_every_metric_and_its_inputs() -> None:
 
 
 @pytest.mark.parametrize(
-    "key,needs_ball,needs_kinds,needs_credit",
+    "key,needs_ball,needs_kinds,needs_fielding,needs_credit",
     [
-        ("balls", True, False, False),
-        ("strike_rate_band", True, False, False),
-        ("maiden", True, False, False),
-        ("economy_band", True, False, False),
-        ("dot_ball", True, False, False),
-        ("duck", False, True, False),
-        ("bowled_lbw_bonus", False, True, False),
-        ("run_out_direct", False, False, True),
-        ("run_out_indirect", False, False, True),
-        ("runs", False, False, False),
-        ("playing_xi", False, False, False),
-        ("player_of_match", False, False, False),
+        ("balls", True, False, False, False),
+        ("strike_rate_band", True, False, False, False),
+        ("maiden", True, False, False, False),
+        ("economy_band", True, False, False, False),
+        ("dot_ball", True, False, False, False),
+        ("duck", False, True, False, False),
+        ("bowled_lbw_bonus", False, True, False, False),
+        ("catch", False, False, True, False),
+        ("multi_catch_bonus", False, False, True, False),
+        ("stumping", False, False, True, False),
+        ("run_out", False, False, True, False),
+        ("run_out_direct", False, False, True, True),
+        ("run_out_indirect", False, False, True, True),
+        ("runs", False, False, False, False),
+        ("playing_xi", False, False, False, False),
+        ("player_of_match", False, False, False, False),
     ],
 )
-def test_registry_availability_flags(key, needs_ball, needs_kinds, needs_credit) -> None:
+def test_registry_availability_flags(
+    key, needs_ball, needs_kinds, needs_fielding, needs_credit
+) -> None:
     spec = data_requirements(key)
     assert spec.needs_ball_data is needs_ball
     assert spec.needs_dismissal_kinds is needs_kinds
+    assert spec.needs_fielding_data is needs_fielding
     assert spec.needs_fielder_credit_types is needs_credit
 
 

@@ -29,6 +29,9 @@ class MetricSpec:
     reads: tuple[str, ...]
     needs_ball_data: bool = False
     needs_dismissal_kinds: bool = False
+    #: Requires the match's fielding counts (catches/stumpings/run-outs).
+    needs_fielding_data: bool = False
+    #: Requires direct-vs-relay run-out attribution (delivery-level data).
     needs_fielder_credit_types: bool = False
     #: Whether a *higher* or a *lower* value is better for tiered rules
     #: ("higher" = counts/strike-rate; "lower" = economy). Tier lists must be
@@ -75,15 +78,22 @@ METRICS: dict[str, MetricSpec] = {
         better_is="lower",
     ),
     "dot_ball": MetricSpec("dot_ball", BOWLING, "numeric", ("dots_bowled",), needs_ball_data=True),
-    "catch": MetricSpec("catch", FIELDING, "numeric", ("catches",)),
-    "multi_catch_bonus": MetricSpec("multi_catch_bonus", FIELDING, "numeric", ("catches",)),
-    "stumping": MetricSpec("stumping", FIELDING, "numeric", ("stumpings",)),
-    "run_out": MetricSpec("run_out", FIELDING, "numeric", ("run_outs_total",)),
+    "catch": MetricSpec("catch", FIELDING, "numeric", ("catches",), needs_fielding_data=True),
+    "multi_catch_bonus": MetricSpec(
+        "multi_catch_bonus", FIELDING, "numeric", ("catches",), needs_fielding_data=True
+    ),
+    "stumping": MetricSpec(
+        "stumping", FIELDING, "numeric", ("stumpings",), needs_fielding_data=True
+    ),
+    "run_out": MetricSpec(
+        "run_out", FIELDING, "numeric", ("run_outs_total",), needs_fielding_data=True
+    ),
     "run_out_direct": MetricSpec(
         "run_out_direct",
         FIELDING,
         "numeric",
         ("run_outs_direct",),
+        needs_fielding_data=True,
         needs_fielder_credit_types=True,
     ),
     "run_out_indirect": MetricSpec(
@@ -91,6 +101,7 @@ METRICS: dict[str, MetricSpec] = {
         FIELDING,
         "numeric",
         ("run_outs_indirect",),
+        needs_fielding_data=True,
         needs_fielder_credit_types=True,
     ),
     "player_of_match": MetricSpec(

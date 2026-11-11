@@ -51,6 +51,7 @@ def _rule_available(rule: PointRuleSpec, coverage: SnapshotCoverage) -> bool:
     missing_inputs = (
         (spec.needs_ball_data and not coverage.has_ball_data)
         or (spec.needs_dismissal_kinds and not coverage.has_dismissal_kinds)
+        or (spec.needs_fielding_data and not coverage.has_fielding_data)
         or (spec.needs_fielder_credit_types and not coverage.has_fielder_credit_types)
     )
     return not missing_inputs

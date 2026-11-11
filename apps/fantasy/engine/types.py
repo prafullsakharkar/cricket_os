@@ -29,11 +29,22 @@ class SnapshotCoverage:
 
     has_ball_data: bool = False
     has_dismissal_kinds: bool = False
+    #: Whether the match's fielding counts (catches/stumpings/run-outs) are
+    #: known. A summary-only match whose dismissals carry no fielder credits
+    #: leaves fielding metrics unsupported — never guessed as zero.
+    has_fielding_data: bool = False
     has_fielder_credit_types: bool = False
 
     def __bool__(self) -> bool:
         # A snapshot with no coverage at all is a degenerate empty snapshot.
-        return any((self.has_ball_data, self.has_dismissal_kinds, self.has_fielder_credit_types))
+        return any(
+            (
+                self.has_ball_data,
+                self.has_dismissal_kinds,
+                self.has_fielding_data,
+                self.has_fielder_credit_types,
+            )
+        )
 
 
 @dataclass(frozen=True)

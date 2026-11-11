@@ -25,7 +25,12 @@ from apps.fantasy.engine import (
     point_rule,
 )
 
-FULL = SnapshotCoverage(has_ball_data=True, has_dismissal_kinds=True, has_fielder_credit_types=True)
+FULL = SnapshotCoverage(
+    has_ball_data=True,
+    has_dismissal_kinds=True,
+    has_fielding_data=True,
+    has_fielder_credit_types=True,
+)
 
 Q = Decimal("0.01")
 

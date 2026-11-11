@@ -23,7 +23,10 @@ from apps.fantasy.engine import (
 )
 
 FULL_COVERAGE = SnapshotCoverage(
-    has_ball_data=True, has_dismissal_kinds=True, has_fielder_credit_types=True
+    has_ball_data=True,
+    has_dismissal_kinds=True,
+    has_fielding_data=True,
+    has_fielder_credit_types=True,
 )
 NO_BALL_COVERAGE = SnapshotCoverage(
     has_ball_data=False, has_dismissal_kinds=False, has_fielder_credit_types=False

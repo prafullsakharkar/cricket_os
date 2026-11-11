@@ -145,6 +145,7 @@ def snapshot_digest(snapshot: FantasyMatchSnapshot) -> str:
         "coverage": {
             "has_ball_data": snapshot.coverage.has_ball_data,
             "has_dismissal_kinds": snapshot.coverage.has_dismissal_kinds,
+            "has_fielding_data": snapshot.coverage.has_fielding_data,
             "has_fielder_credit_types": snapshot.coverage.has_fielder_credit_types,
         },
         "super_over_played": snapshot.super_over_played,
