@@ -519,7 +519,7 @@ points tables, H2H, records, form.
 
 ---
 
-## Phase H — Optional fantasy statistics — **DONE (10 tasks, commits `54c309a`…`a61dca5`, branch `phase-h`)**
+## Phase H — Optional fantasy statistics — **DONE (10 tasks, commits `54c309a`…`2ee2dd2`, branch `phase-h`)**
 
 **Goal:** versioned fantasy scoring rules, points computation, summaries, audit
 — as **computed player points only** (contests/wagering/user teams out of scope).
@@ -544,15 +544,18 @@ points tables, H2H, records, form.
   8. Observability (fantasy metric family, alerts, runbooks).
   9. Docs (`FANTASY.md` + schema/domain/API/architecture/coverage/testing/
      security updates).
-  10. Coverage gate + benchmarks (`.coveragerc-phaseh`: engine/freeze/ledger
-      ≥ 95% branch, app ≥ 90% line; `test-phaseh` in `make check`).
+  10. Coverage gate + benchmarks (`.coveragerc-phaseh`: engine/authoring/
+      ledger/adjustments ≥ 95% branch, app ≥ 90% line; `test-phaseh` in
+      `make check`; `scripts/fantasy_benchmark.py` report-only).
 - **Tables/modules:** `fantasy` (7 tables, DDL §3.8).
 - **Endpoints:** `/fantasy/points`, `/fantasy/rulesets`
   (+ `/{id}/versions/{version}`), `/fantasy/matches/{id}` — registered only
   when `FANTASY_PUBLIC_API_ENABLED` is on.
 - **Acceptance (verified):** points reproducible from a frozen ruleset version
-  + a match snapshot (`fantasy_verify` replays stored snapshots); 250+ Phase H
-  tests; `make check` + `test-phaseh` green.
+  + a match snapshot (`fantasy_verify` replays stored snapshots); 318 Phase H
+  tests; `make check` + `test-phaseh` green; app-wide `apps/fantasy` 100% line,
+  high-risk gate (engine/authoring/ledger/adjustments) 100% branch;
+  migration-drift + schema-ddl green (57 scoped tables).
 - **Key decisions:** ledger supersession is derived (never mutated);
   adjustments live only in their own append-only table; void = offsetting
   entry; `set_default_version` runs on a draft; `retire_version` forks a new
