@@ -549,3 +549,59 @@ a ruleset difference, a partial-data run, or an unsupported rule — not a bug.
 
 **Verification.** `fantasy_verify match --ids <match_id>` exits 0 and the
 adjusted total equals computed + net adjustment.
+
+## Shadow mode
+
+**Symptoms.** The shadow comparison pass (Phase I Task 2) flags a mismatch
+between the platform's derived card, the provider's card, and the second
+source (raw-delivery derivation) — `ShadowMismatchRateHigh`, or a pass-level
+alert (`ShadowUnresolvedIdentityHigh`, `ShadowCorrectionLagHigh`,
+`ShadowSchemaDrift`, `ShadowCoverageGapsHigh`). Shadow comparisons are
+**flag-and-queue, never auto-correct**: a finding is a `ShadowComparisonMismatch`
+`IngestionError` DLQ row + a dated report under `reports/shadow/<YYYY-MM-DD>.md`.
+
+**Detection.** `run_shadow_pass` (beat task `shadow.compare_all` /
+`manage.py shadow_report`) runs only when `PROVIDER_SHADOW_MODE=true` (default
+off). The dated report lists findings per category with ours/provider/second
+values; metrics `shadow_mismatches_total{category,severity}` and
+`shadow_comparisons_total{category}` carry the rate.
+
+**Impact.** While the provider gate is unmet
+(`docs/PROVIDER_DECISION.md`), the shadow provider is the **ReplayAdapter** and
+a clean pass should produce **zero** findings — a finding here means the
+read models drifted from the raw-delivery derivation (a real data-quality bug,
+usually in the rebuild path). Every number is **UNVERIFIED** against a licensed
+provider and the staging environment (`docs/STAGING_ACCESS.md`); thresholds in
+`ops/alerts/shadow_alerts.yml` are PROPOSED (`docs/LAUNCH_CRITERIA.md`).
+
+**Recovery.**
+
+1. **Read the report.** `reports/shadow/<YYYY-MM-DD>.md` groups findings by
+   category. A `totals`/`wickets`/`extras`/`result` (severity `critical`)
+   finding means a displayed score would be wrong — investigate immediately.
+   A `batting`/`bowling` (severity `diff`) finding is a line-level drift.
+2. **Find the drift source.** Rebuild the affected match's read models
+   (`rebuild_match`, the same path `result_service.finalise` uses) and
+   re-run the pass. If the finding disappears, the read models were stale; if
+   it persists, the raw-delivery derivation or the read-model build disagrees
+   with the engine conventions — compare against the golden mapping fixture
+   (`tests/contracts/test_golden_mapping.py`).
+3. **Adjudicate DLQ rows.** `ShadowComparisonMismatch` rows under
+   `stage="shadow_compare"` carry the category/field and ours/provider/second
+   values. Resolve per the [DLQ triage](#dlq-triage) flow — never edit match
+   rows from the queue.
+4. **Identity backlog.** `ShadowUnresolvedIdentityHigh` — run
+   `manage.py link_provider_identities --provider replay --dry-run` and review
+   candidates; see [Identity conflict](#identity-conflict).
+5. **Schema drift.** `ShadowSchemaDrift` — the adapter served a
+   malformed/unknown-enum payload; quarantine rows are under
+   `stage__in=("validation","contract","adapter")`. Re-drive via the [Schema
+   drift](#schema-drift) flow.
+6. **Coverage gaps.** `ShadowCoverageGapsHigh` — completed matches the shadow
+   provider omitted or lists late; compare against the second source's window
+   and re-ingest what is missing.
+
+**Verification.** Re-running `manage.py shadow_report` on the same day
+reproduces the report deterministically (same findings). A clean replay corpus
+yields zero findings and no new `stage="shadow_compare"` DLQ rows;
+`shadow_mismatches_total` flatlines.

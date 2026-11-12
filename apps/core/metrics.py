@@ -313,6 +313,47 @@ RATE_LIMIT_FALLBACK = metric(
     "Requests limited by the per-process fallback store (primary store down)",
 )
 
+# Phase I — shadow-mode comparison (brief Task 2; provider gate unmet, so the
+# shadow provider is the ReplayAdapter and every value is MEASURED against the
+# replay corpus, UNVERIFIED against a licensed provider).
+SHADOW_COMPARISONS = metric(
+    "shadow_comparisons_total",
+    "Shadow comparisons completed per category",
+    labelnames=("category",),
+)
+SHADOW_MISMATCHES = metric(
+    "shadow_mismatches_total",
+    "Shadow comparison mismatches per category and severity (never auto-corrected)",
+    labelnames=("category", "severity"),
+)
+SHADOW_INGEST_LATENCY = metric(
+    "shadow_ingest_latency_seconds",
+    "Provider-event-time to event-log-time latency measured in shadow mode",
+    kind="histogram",
+)
+SHADOW_CORRECTION_LAG = metric(
+    "shadow_correction_lag_seconds",
+    "Provider revision time to applied-correction time lag in shadow mode",
+    kind="histogram",
+)
+SHADOW_CORRECTIONS = metric(
+    "shadow_corrections_total",
+    "Corrections observed on shadow-ingested matches",
+)
+SHADOW_UNRESOLVED_IDENTITY = metric(
+    "shadow_unresolved_identity_total",
+    "Unverified provider-entity map rows for the shadow provider",
+    kind="gauge",
+)
+SHADOW_SCHEMA_DRIFT = metric(
+    "shadow_schema_drift_total",
+    "Adapter contract/validation quarantine events during shadow ingest",
+)
+SHADOW_COVERAGE_GAPS = metric(
+    "shadow_coverage_gaps_total",
+    "Matches the shadow provider omits or lists late vs the second source",
+)
+
 __all__ = [
     "BREAKER_STATE",
     "CACHE_BREAKER_OPEN",
@@ -347,6 +388,14 @@ __all__ = [
     "REALTIME_GAP_BACKFILLS",
     "REALTIME_INVALID_FRAMES",
     "REALTIME_RESYNCS",
+    "SHADOW_COMPARISONS",
+    "SHADOW_CORRECTIONS",
+    "SHADOW_CORRECTION_LAG",
+    "SHADOW_COVERAGE_GAPS",
+    "SHADOW_INGEST_LATENCY",
+    "SHADOW_MISMATCHES",
+    "SHADOW_SCHEMA_DRIFT",
+    "SHADOW_UNRESOLVED_IDENTITY",
     "SHADOW_VERIFY_MISMATCHES",
     "Metric",
     "metric",

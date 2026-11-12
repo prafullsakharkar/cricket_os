@@ -151,6 +151,13 @@ _ALERT_FILES: dict[str, set[str]] = {
         "FantasyRecomputeFailures",
         "FantasyVerifyMismatch",
     },
+    "ops/alerts/shadow_alerts.yml": {
+        "ShadowMismatchRateHigh",
+        "ShadowUnresolvedIdentityHigh",
+        "ShadowCorrectionLagHigh",
+        "ShadowSchemaDrift",
+        "ShadowCoverageGapsHigh",
+    },
 }
 
 
@@ -176,6 +183,7 @@ def test_alert_rules_file_parses_and_cross_checks() -> None:
         "rate",
         "increase",
         "histogram_quantile",
+        "clamp_min",
         "le",
         "match_id",
         "provider",

@@ -1,0 +1,86 @@
+# Shadow-mode comparison alert rules (Phase I Task 2).
+#
+# Every alert maps to a runbook in docs/RUNBOOKS.md (## Shadow mode).
+# Thresholds are PROPOSED (docs/LAUNCH_CRITERIA.md) — configuration, not
+# code — and every measured value is UNVERIFIED until the provider and
+# environment gates are met (docs/PROVIDER_DECISION.md, docs/STAGING_ACCESS.md):
+# the shadow provider is the ReplayAdapter and the topology is local.
+# Metric names come from apps/core/metrics.py (shadow_* family).
+#
+# NOTE: static rule file for a Prometheus-compatible operator; validated by
+# tests/phase_i/test_observability.py and tests/phase_d/test_observability.py
+# (YAML parse + metric-name/runbook cross-checks) rather than a live Prometheus.
+groups:
+  - name: shadow_comparison
+    rules:
+      # Shadow comparisons are flag-and-queue (never auto-correct), so a
+      # sustained mismatch rate means our derived rows are drifting from the
+      # provider/second source and stewards are being asked to adjudicate
+      # real data-quality problems. Threshold is PROPOSED.
+      - alert: ShadowMismatchRateHigh
+        expr: |
+          rate(shadow_mismatches_total[15m]) / clamp_min(rate(shadow_comparisons_total[15m]), 1) > 0.01
+        for: 30m
+        labels:
+          severity: warning
+          runbook: "shadow mode"
+        annotations:
+          summary: "Shadow comparison mismatch rate is high"
+          description: "{{ $value }} of shadow comparisons in the last 15m mismatched. See runbook: shadow mode."
+
+      # A backlog of unverified provider-entity map rows for the shadow
+      # provider means identity linking is not keeping up (or stubs are
+      # piling up). Threshold is PROPOSED.
+      - alert: ShadowUnresolvedIdentityHigh
+        expr: |
+          shadow_unresolved_identity_total > 50
+        for: 30m
+        labels:
+          severity: warning
+          runbook: "shadow mode"
+        annotations:
+          summary: "Unresolved shadow-provider identities are high"
+          description: "{{ $value }} provider-entity map rows are unverified. See runbook: shadow mode."
+
+      # Correction lag is measured as provider-revision-time → applied-time.
+      # In replay mode it is not measurable (no provider revision timestamp),
+      # so this rule only fires for a real provider once the gates are met.
+      # Threshold is PROPOSED.
+      - alert: ShadowCorrectionLagHigh
+        expr: |
+          histogram_quantile(0.99, sum(rate(shadow_correction_lag_seconds_bucket[15m])) by (le)) > 300
+        for: 15m
+        labels:
+          severity: warning
+          runbook: "shadow mode"
+        annotations:
+          summary: "Shadow correction lag is high"
+          description: "p99 correction lag exceeded 300s. See runbook: shadow mode."
+
+      # The adapter served a malformed/unknown-enum payload during shadow
+      # ingest (schema drift). Any occurrence is actionable: the contract is
+      # broken and quarantine rows need adjudication.
+      - alert: ShadowSchemaDrift
+        expr: |
+          increase(shadow_schema_drift_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "shadow mode"
+        annotations:
+          summary: "Shadow ingest observed schema drift"
+          description: "The adapter served a malformed/unknown-enum payload. See runbook: shadow mode."
+
+      # Completed matches the shadow provider omitted or listed late vs the
+      # second source. A growing gap count means coverage is silently
+      # shrinking. Threshold is PROPOSED.
+      - alert: ShadowCoverageGapsHigh
+        expr: |
+          increase(shadow_coverage_gaps_total[15m]) > 5
+        for: 15m
+        labels:
+          severity: warning
+          runbook: "shadow mode"
+        annotations:
+          summary: "Shadow coverage gaps are growing"
+          description: "{{ $value }} completed matches are missing/late vs the second source. See runbook: shadow mode."

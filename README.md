@@ -8,6 +8,8 @@ full design lives in the [planning package](docs/README.md).
 
 - Conventions for the database: [docs/DB_CONVENTIONS.md](docs/DB_CONVENTIONS.md)
 - How we change the schema safely: [docs/MIGRATION_WORKFLOW.md](docs/MIGRATION_WORKFLOW.md)
+- Pre-launch shadow comparison mode (Phase I): [docs/SHADOW_MODE.md](docs/SHADOW_MODE.md)
+- Pre-launch exit criteria and their owners: [docs/LAUNCH_CRITERIA.md](docs/LAUNCH_CRITERIA.md)
 
 ## Stack
 

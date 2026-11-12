@@ -60,6 +60,11 @@ env = environ.Env(
     FANTASY_PROVISIONAL_INTERVAL_SECONDS=(int, 60),
     FANTASY_DEFAULT_AUTO_RECOMPUTE=(bool, True),
     FANTASY_ENGINE_VERSION=(str, "1.0.0"),
+    # Phase I shadow-mode flags (docs/SHADOW_MODE.md). OFF by default: the
+    # shadow pass only runs when explicitly enabled.
+    PROVIDER_SHADOW_MODE=(bool, False),
+    SHADOW_COMPARISON_PROVIDER=(str, "replay"),
+    SHADOW_REPORT_DIR=(str, "reports/shadow"),
     DJANGO_ENVIRONMENT=(str, "dev"),
 )
 
@@ -110,6 +115,20 @@ LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
 # Deployment environment name ("dev"/"test"/"prod"). The ReplayAdapter is
 # hard-gated to non-prod (see apps.providers.adapters.replay).
 ENVIRONMENT = env("DJANGO_ENVIRONMENT")
+
+# --------------------------------------------------------------------------- #
+# Phase I — shadow mode (docs/SHADOW_MODE.md)
+# --------------------------------------------------------------------------- #
+# Master switch for the shadow comparison pass (beat task + shadow_report
+# command). OFF by default. While the provider gate (docs/PROVIDER_DECISION.md)
+# is unmet, the shadow provider is the ReplayAdapter and every measured value
+# is UNVERIFIED against a licensed provider.
+PROVIDER_SHADOW_MODE = env("PROVIDER_SHADOW_MODE")
+# Which provider code the shadow pass compares against (the replay adapter
+# until the provider gate is met).
+SHADOW_COMPARISON_PROVIDER = env("SHADOW_COMPARISON_PROVIDER")
+# Where dated shadow reports are written (overridable in tests).
+SHADOW_REPORT_DIR = env("SHADOW_REPORT_DIR")
 
 # --------------------------------------------------------------------------- #
 # Phase H — fantasy flags (docs/FANTASY.md documents each one)
@@ -212,6 +231,7 @@ LOCAL_APPS = [
     "apps.live",
     "apps.realtime",
     "apps.fantasy",
+    "apps.shadow",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

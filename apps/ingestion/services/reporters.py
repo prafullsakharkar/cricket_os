@@ -54,16 +54,47 @@ def _report_unresolved_ranking(row: Any, *, provider: Any = None) -> None:
     )
 
 
+def _report_shadow_comparison(finding: Any) -> None:
+    """DLQ writer for a shadow-comparison mismatch (Phase I Task 2).
+
+    Shadow comparisons are flag-and-queue, never auto-correct (SECURITY §9).
+    The payload carries the finding's category/values; ``record_error``
+    redacts it before storage.
+    """
+    from apps.ingestion.services.jobs import record_error
+
+    record_error(
+        None,
+        stage="shadow_compare",
+        payload={
+            "match_id": finding.match_id,
+            "category": finding.category,
+            "field": finding.field,
+            "innings_number": finding.innings_number,
+            "entity_key": finding.entity_key,
+            "severity": finding.severity,
+        },
+        error_class="ShadowComparisonMismatch",
+        error_detail=(
+            f"shadow comparison mismatch: {finding.category}/{finding.field} "
+            f"inn={finding.innings_number} key={finding.entity_key} "
+            f"ours={finding.ours!r} provider={finding.provider!r} second={finding.second!r}"
+        ),
+    )
+
+
 def register_default_reporters() -> None:
-    """Wire the reconciliation + shadow-verify + rankings DLQ reporters."""
+    """Wire the reconciliation + shadow-verify + shadow-comparison + rankings reporters."""
     from apps.ingestion.services.jobs import reconciliation_mismatch_reporter
     from apps.live.services.verify import register_shadow_verify_reporter
     from apps.rankings.services.import_rankings import register_unresolved_reporter
+    from apps.shadow.compare import register_shadow_comparison_reporter
     from apps.synchronization.services.reconciliation import register_mismatch_reporter
 
     register_mismatch_reporter(reconciliation_mismatch_reporter)
     register_shadow_verify_reporter(_report_shadow_verify_mismatch)
     register_unresolved_reporter(_report_unresolved_ranking)
+    register_shadow_comparison_reporter(_report_shadow_comparison)
 
 
 __all__ = ["register_default_reporters"]

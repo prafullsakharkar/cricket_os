@@ -203,6 +203,7 @@ source_modules = [
   "apps.search",
   "apps.synchronization",
   "apps.fantasy",
+  "apps.shadow",
 ]
 forbidden_modules = ["apps.administration", "apps.ingestion", "apps.realtime"]
 
