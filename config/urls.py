@@ -33,6 +33,12 @@ urlpatterns: list[Any] = [
     path("api/v1/", include("apps.realtime.urls")),
 ]
 
+# Phase H fantasy read endpoints: OFF by default (the product/legal gate is
+# ABSENT — docs/FANTASY_PRODUCT_DECISION.md), so the routes are unregistered
+# and answer 404 at the URL level when disabled.
+if getattr(settings, "FANTASY_PUBLIC_API_ENABLED", False):
+    urlpatterns.append(path("api/v1/", include("apps.fantasy.api.urls")))
+
 # Internal Prometheus exposition — an ops surface, never public. Registered
 # only when ENABLE_METRICS_ENDPOINT is on so the path 404s when disabled.
 if getattr(settings, "ENABLE_METRICS_ENDPOINT", False):

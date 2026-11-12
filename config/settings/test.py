@@ -47,6 +47,10 @@ RATELIMIT_BACKEND = "in_process"
 # Serve the OpenAPI schema in tests (schemathesis contract tests read it).
 ENABLE_API_SCHEMA = True
 
+# Phase H fantasy read endpoints on for the API/contract suites (the default
+# in production is OFF behind the product/legal gate).
+FANTASY_PUBLIC_API_ENABLED = True
+
 # Serve the internal /metrics exposition in tests so its contract is verified.
 ENABLE_METRICS_ENDPOINT = True
 
