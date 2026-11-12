@@ -139,14 +139,28 @@ responses also carry the source local date/time and timezone.
 
 ### 2.6 Fantasy + meta
 
+Fantasy endpoints (Phase H) are registered **only when
+`FANTASY_PUBLIC_API_ENABLED` is on** (default off — product/legal gate,
+`docs/FANTASY_PRODUCT_DECISION.md` ABSENT), and each view re-checks the flag,
+so disabled = 404 at the URL level and in `dispatch`. Full module semantics:
+`docs/FANTASY.md`.
+
 | Method | Path | Purpose | Cache |
 |---|---|---|---|
-| GET | `/fantasy/points` | Points by match/player (`?match=&player=&ruleset_version=`) | `max-age=120` |
-| GET | `/fantasy/rulesets` | Available rulesets/versions | `max-age=3600` |
-| GET | `/fantasy/matches/{id}` | Points for a match | `max-age=120` |
+| GET | `/fantasy/rulesets` | Public (non-draft) ruleset catalogue; `?fields=` sparse | `max-age=3600` |
+| GET | `/fantasy/rulesets/{ruleset_id}/versions/{version}` | One version + its declarative rules (404 for drafts) | `max-age=3600` |
+| GET | `/fantasy/points` | Points rows by `?match=` `?player=` `?ruleset_version=` (≥1 required, else 400 `invalid_query`); page-number pagination | ETag/304 |
+| GET | `/fantasy/matches/{id}` | All players for the primary version, ordered by `-total_points` | `max-age=120` |
 | GET | `/search` | Cross-entity search (`?q=&types=`) | `max-age=30` |
 | WS/SSE | `/ws/matches/{id}` · `/sse/matches/{id}` | Live updates | n/a |
 | GET | `/health` `/metrics` | Ops | no-cache |
+
+**Fantasy response `meta` (every endpoint):** `label: "derived"`, a notice
+that points are computed under the stated ruleset and are **not any third
+party's official fantasy points**, `calc_run_id`, `status` (`final`|
+`provisional`), `is_partial`, `unsupported_rules`, `as_of`, and
+`ruleset {id, version, hash}`. **Draft versions are never public.** Merged
+players answer `301` to the canonical id (other query params preserved).
 
 ---
 

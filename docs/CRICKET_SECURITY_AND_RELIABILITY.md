@@ -56,6 +56,21 @@ satisfies Phase 10 of the brief and is referenced from the README.
 
 ## 4. Audit logging & provenance
 
+- **Fantasy append-only enforcement (Phase H).** `fantasy_points_ledger`,
+  `fantasy_point_adjustment` and `fantasy_calc_audit` are append-only at the
+  **database level** (migration 0002 triggers block UPDATE/DELETE for every
+  role, including the app superuser), and frozen `fantasy_ruleset_version` /
+  `fantasy_point_rule` rows are immutable once frozen (same triggers). The
+  services re-check (authoring refuses to edit a frozen version; adjustments
+  void by appending an offsetting entry), so there is no code path that
+  mutates the trail. Current points are **derived** from the latest calc run,
+  never stored as a mutable total.
+- **Fantasy roles.** Freezing a version, setting a default, and retiring are
+  `admin`-only; applying/voiding an adjustment is `data_steward`/`admin`;
+  validate/dry-run and the read API are open. Adjustments carry an audit
+  `actor_label` (the stock auth `User` has an int pk, so `adjusted_by` stays
+  NULL unless the user exposes a `uuid`).
+
 - **`DataCorrection`** and **`FantasyPointsLedger`** are append-only.
 - A global **`AuditLog`** records admin actions (who, what, before/after,
   timestamp, IP).
@@ -111,6 +126,14 @@ satisfies Phase 10 of the brief and is referenced from the README.
   runbook (see §10). Both alert files (`ops/alerts/live_alerts.yml`,
   `ops/alerts/realtime_alerts.yml`) are validated by a contract test against
   the registered metric names and `docs/RUNBOOKS.md` headings.
+- **Fantasy (Phase H):** `fantasy_recompute_lag` / `fantasy_queue_depth` /
+  `fantasy_sweep_findings` / `fantasy_recompute_seconds` (histogram) /
+  `fantasy_recompute_failures_total` / `fantasy_partial_rate` /
+  `fantasy_unsupported_rule_counts{metric}` / `fantasy_ledger_growth` /
+  `fantasy_verify_mismatches_total`; alerts in `ops/alerts/fantasy_alerts.yml`
+  (`FantasyStaleCalc`, `FantasyRecomputeFailures`, `FantasyVerifyMismatch`),
+  runbooks `## Fantasy pipeline` / `## Fantasy points dispute`. The same
+  contract test covers the fantasy alert file.
 - **Reliability posture (Phase E):** the cache breaker fails **open** (reads
   build directly, never block); realtime Redis pub/sub failure degrades to
   polling the durable `match_event_log` (`realtime_degraded`) and recovers

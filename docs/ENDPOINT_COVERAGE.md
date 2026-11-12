@@ -87,9 +87,9 @@ uncovered were implemented in the same group.
 
 | Endpoint | Status | Phase / commit | View | Notes |
 |---|---|---|---|---|
-| `GET /fantasy/points` | 🔜 deferred | — | — | fantasy is out of Phase F scope (brief: statistics/rankings/search) |
-| `GET /fantasy/rulesets` | 🔜 deferred | — | — | same |
-| `GET /fantasy/matches/{id}` | 🔜 deferred | — | — | same |
+| `GET /fantasy/points` | ✅ live | H / `7856e55` | `apps/fantasy/api/views.py` `FantasyPointsView` | flag-gated (`FANTASY_PUBLIC_API_ENABLED`, default off); page-number; `?match=`/`?player=`/`?ruleset_version=` (≥1 required); meta carries calc identity; drafts never public |
+| `GET /fantasy/rulesets` (+ `/{ruleset_id}/versions/{version}`) | ✅ live | H / `7856e55` | `FantasyRulesetListView` / `FantasyRulesetVersionDetailView` | catalogue omits rulesets with zero public versions; version detail 404 for drafts; `?fields=` sparse; `max-age=3600` |
+| `GET /fantasy/matches/{id}` | ✅ live | H / `7856e55` | `FantasyMatchPointsView` | all players for the primary version, ordered by `-total_points`; `max-age=120` |
 | `GET /search` | ✅ live | **7** | `apps/search/api/views.py` `SearchView` | `?q=&types=`; `400 invalid_query` on bad input |
 | `WS/SSE /ws/matches/{id}` `/sse/matches/{id}` | ✅ live | E | `apps/realtime/` | full wire contract in FRONTEND_CONTRACT.md |
 | `GET /health` `/metrics` | ✅ live | D/E | `apps/core/views.py` | ops surfaces |
@@ -105,13 +105,13 @@ uncovered were implemented in the same group.
 
 ## Coverage summary
 
-- **Specified read endpoints:** 39 (excluding the 3 fantasy rows).
-- **Implemented:** 32 ✅ / 3 ⚠️ partial.
-- **Deferred:** 4 (commentary, match performance, player matches, team matches)
-  + 3 fantasy rows.
+- **Specified read endpoints:** 42 (39 pre-fantasy + the 3 fantasy rows).
+- **Implemented:** 35 ✅ / 3 ⚠️ partial.
+- **Deferred:** 4 (commentary, match performance, player matches, team matches).
 - **Phase F added 23 endpoints** across Groups 5/7/8 (rankings ×2, statistics/
   analytics ×13, search ×1, coverage thin ×9 minus shared routes — the exact
-  split is in the ledger).
+  split is in the ledger). **Phase H added 4 fantasy endpoints** (rulesets,
+  ruleset version detail, points, matches) behind `FANTASY_PUBLIC_API_ENABLED`.
 - Every endpoint is served through `CachedReadMixin` with a version namespace
   and reads **digest-validated aggregate rows or current rows only** — no Phase
   F endpoint scans the partitioned `delivery` table (guarded by the Group 7
@@ -141,4 +141,3 @@ uncovered were implemented in the same group.
 - **`/players/{id}/matches`**, **`/teams/{id}/matches`** — match history by
   entity; equivalent data is reachable through `/matches` filters
   (`?team=`/`?series=`). Deferred to keep the read surface minimal.
-- **`/fantasy/*`** — the fantasy app is outside the Phase F brief.

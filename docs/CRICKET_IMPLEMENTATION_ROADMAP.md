@@ -519,22 +519,48 @@ points tables, H2H, records, form.
 
 ---
 
-## Phase H — Optional fantasy statistics
+## Phase H — Optional fantasy statistics — **DONE (10 tasks, commits `54c309a`…`a61dca5`, branch `phase-h`)**
 
-**Goal:** versioned fantasy scoring rules, points computation, summaries, audit.
+**Goal:** versioned fantasy scoring rules, points computation, summaries, audit
+— as **computed player points only** (contests/wagering/user teams out of scope).
 
-- **Tasks**
-  1. Fantasy models (`ruleset`, `version`, `point_rule`, `player_match_performance`,
-     `ledger`, `adjustment`, `calc_audit`).
-  2. `fantasy_service.compute` (pure, replays from `PlayerMatchStat`).
-  3. Live/final fantasy recompute; adjustments with audit.
-  4. Ruleset authoring + version freezing.
-- **Tables/modules:** `fantasy`.
-- **Endpoints:** `/fantasy/points`, `/fantasy/rulesets`, `/fantasy/matches/{id}`.
-- **Tests:** ruleset versioning, recompute determinism, adjustment audit,
-  frozen-version immutability.
-- **Acceptance:** points reproducible from a frozen ruleset version + a match snapshot.
-- **Risks:** rule ambiguity (mitigated by versioning + audit). **Effort:** 25.
+- **Product/legal gate:** `docs/FANTASY_PRODUCT_DECISION.md` is ABSENT →
+  every shipped ruleset is DRAFT-only and `FANTASY_PUBLIC_API_ENABLED=false`
+  by default. Seeds (when added) are illustrative round-number DRAFTs labelled
+  "requires product-owner approval before freezing", never frozen by a seed;
+  the project never copies commercial operators' point tables.
+- **Tasks (all done):**
+  1. Models + migrations + enforcement (7 tables, expression uniques,
+     append-only/frozen triggers, policies, administration perms).
+  2. Pure stdlib-only engine (closed 22-metric registry, Decimal end-to-end,
+     no eval/expression strings, import-linter contract #10).
+  3. Snapshot builder + selectors (4-query read, fielding derivation).
+  4. Tier-2 pipeline (idempotent recompute, advisory lock, provisional gated,
+     sweep/backfill/verify commands, event wiring) + append-only ledger.
+  5. Adjustments (role-gated, bounded, append-only void, audit + cache).
+  6. Ruleset authoring + admin (validate/dry-run/freeze/set-default/retire).
+  7. Flag-gated public read API (rulesets catalogue + detail, points, match
+     points; meta label `derived` + notice; drafts never public; merged→301).
+  8. Observability (fantasy metric family, alerts, runbooks).
+  9. Docs (`FANTASY.md` + schema/domain/API/architecture/coverage/testing/
+     security updates).
+  10. Coverage gate + benchmarks (`.coveragerc-phaseh`: engine/freeze/ledger
+      ≥ 95% branch, app ≥ 90% line; `test-phaseh` in `make check`).
+- **Tables/modules:** `fantasy` (7 tables, DDL §3.8).
+- **Endpoints:** `/fantasy/points`, `/fantasy/rulesets`
+  (+ `/{id}/versions/{version}`), `/fantasy/matches/{id}` — registered only
+  when `FANTASY_PUBLIC_API_ENABLED` is on.
+- **Acceptance (verified):** points reproducible from a frozen ruleset version
+  + a match snapshot (`fantasy_verify` replays stored snapshots); 250+ Phase H
+  tests; `make check` + `test-phaseh` green.
+- **Key decisions:** ledger supersession is derived (never mutated);
+  adjustments live only in their own append-only table; void = offsetting
+  entry; `set_default_version` runs on a draft; `retire_version` forks a new
+  draft; the API re-checks its flag in `dispatch`; routes have no trailing
+  slash. Full list in the SDD ledger.
+- **Risks:** rule ambiguity (mitigated by versioning + audit + freeze).
+  **Effort:** 25 planned dev-days (see the Phase H final report for the
+  actual figure and deviation).
 - **DoD:** fantasy points computed and auditable; no paid-contest functionality.
 
 ---

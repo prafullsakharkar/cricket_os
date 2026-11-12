@@ -408,3 +408,49 @@ indexes (incl. partial predicates and `INCLUDE` columns), constraints, enums
 (labels and order) or partitioning.
 
 ---
+
+## 17. Fantasy (Phase H) test additions
+
+The `fantasy` module ships its own gate: `make test-phaseh` runs the whole
+`tests/phase_h/` suite under `.coveragerc-phaseh` — engine/freeze/ledger at
+≥ 95% **branch**, app-wide `apps/fantasy` ≥ 90% **line** — and is wired into
+`make check` (Task 10). What the 250+ Phase H tests cover:
+
+- **Engine (pure, stdlib-only, contract #10):** a closed 22-metric registry,
+  every operator (`per_unit`, `threshold_bonus`, `tiered`, `capped`, `flag`),
+  Decimal end-to-end (`ROUND_HALF_UP`, 2 dp, no floats in math/storage),
+  golden vectors, an oracle (independent reference implementation), property
+  tests (determinism, no mutation), vocabulary/validation errors, availability
+  gating (`unsupported_rules`, `is_partial`), and **purity** (import-linter
+  forbids `apps.fantasy.engine` from importing `apps.core`).
+- **Models + enforcement:** 7 tables, expression uniques (`ux_fpr`,
+  `ux_frv_default`), the append-only/frozen **DB triggers** (migration 0002 —
+  UPDATE/DELETE blocked for every role), policies, and administration
+  permissions (0006).
+- **Pipeline:** snapshot builder (4-query selector, fielding derivation),
+  idempotent `recompute_match` under advisory lock + `select_for_update`,
+  provisional gating, sweep/backfill/verify commands, event wiring
+  (`match.completed`, `correction.applied`, `player.merged`), and the
+  **merge integration** (winner recomputed over both players' match ids,
+  loser's PMP deleted, history survives).
+- **Adjustments:** role gating, the `|delta| ≤ 1000.00` bound, append-only
+  void (offsetting entry), audit + cache invalidation, and re-fold on
+  recompute.
+- **Authoring:** whole-version validation before writes, dry-run diffs,
+  freeze immutability (service + trigger), at-most-one defaults, retire-by-
+  fork.
+- **API + contract:** the three flag-gated read endpoints (envelope, meta
+  `label: "derived"` + notice, calc identity, drafts-never-public, merged →
+  301, ETag/304, query-count/no-`delivery` guards) and the OpenAPI contract
+  (schemathesis parse + jsonschema payload-vs-component validation).
+- **Observability:** the fantasy metric family renders, the pipeline
+  instruments it (failures/seconds/partial/unsupported/lag/findings/verify/
+  ledger/queue), and the alert→metric→runbook contract holds
+  (`ops/alerts/fantasy_alerts.yml` × `docs/RUNBOOKS.md`).
+
+The DB-trigger immutability tests use `pytest.raises(DatabaseError)` inside
+`transaction.atomic()` savepoints (a trigger raise aborts the surrounding
+transaction), and blocked-call tests expect `ProgrammingError`/`DatabaseError`
+— never `IntegrityError`.
+
+---

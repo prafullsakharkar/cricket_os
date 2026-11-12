@@ -474,36 +474,73 @@ diagram and PostgreSQL DDL.
 
 ## 5. Optional fantasy scoring
 
-### 5.1 FantasyRuleset
-- **Fields:** `id uuid PK`; `name text`; `provider_scope text` (`generic|dream11_like|custom`); `description text`; `is_active bool`; `created_by uuid`.
-- **Class:** SRC (config).
+Fantasy is **computed per-player points** under a **versioned, frozen
+ruleset** (Phase H; full semantics in `FANTASY.md`). Seven tables, DDL in
+`CRICKET_DATABASE_SCHEMA.md` §3.8. Product/legal gate: `FANTASY_PRODUCT_DECISION.md`
+is ABSENT → all rulesets ship DRAFT-only and the public API is flag-off by
+default.
 
-### 5.2 FantasyRulesetVersion
-- **Fields:** `id uuid PK`; `ruleset_id uuid not null FK`; `version int not null`; `effective_from timestamptz`; `effective_to timestamptz null`; `format_scope enum_format_type null`; `is_frozen bool` (immutable once used).
-- **Unique:** `(ruleset_id, version)`.
-- **Class:** SRC. **Versioning:** versioned by design — this is the audit anchor.
+### 5.1 FantasyRuleset (SRC, config)
+- **Fields:** `id uuid PK`; `name text`; `provider_scope text`; `description
+  text`; `is_active bool`; `created_by` (audited).
 
-### 5.3 FantasyPointRule
-- **Fields:** `id uuid PK`; `ruleset_version_id uuid not null FK`; `event_type text` (`run|boundary_four|boundary_six|wicket|maiden_over|catch|stumping|runout|dot_ball|economy_bonus|strike_rate_bonus|playing_xi|duck|starting_xi|...`); `role_scope text null` (`batter|bowler|all_rounder|keeper|any`); `points numeric(6,2)`; `condition jsonb null` (e.g. `{min_runs:50}`); `cap_kind text null` (`none|per_match|per_innings`).
-- **Unique:** `(ruleset_version_id, coalesce(role_scope,'any'), event_type, coalesce(condition_hash,''))`.
-- **Class:** SRC (config).
+### 5.2 FantasyRulesetVersion (SRC, audit anchor)
+- **Fields:** `id uuid PK`; `ruleset_id uuid not null FK`; `version int not
+  null`; `effective_from timestamptz`; `effective_to timestamptz null`;
+  `format_scope enum_format_type null`; `status` (`draft|frozen|retired`);
+  `is_frozen bool`; `content_hash` (canonical digest of rules + parameters,
+  recorded at freeze); `frozen_at` / `frozen_by`; `is_default bool`;
+  `auto_recompute bool`; `policies jsonb` (engine policy overrides).
+- **Unique:** `(ruleset_id, version)`; at-most-one default per
+  (ruleset, format) — `ux_frv_default`.
+- **Immutability:** once frozen, UPDATE/DELETE/INSERT are blocked by a DB
+  trigger (migration 0002) and by the authoring service. Changing rules means
+  a new version; `retire_version` forks a new draft (never edits).
 
-### 5.4 PlayerMatchPerformance (fantasy)
-- **Fields:** `id uuid PK`; `match_id uuid FK`; `player_id uuid FK`; `ruleset_version_id uuid FK`; `total_points numeric(8,2)`; `breakdown jsonb` (per-event points); `is_playing_xi bool`; `computed_at`; `revision`.
+### 5.3 FantasyPointRule (SRC, config)
+- **Fields:** `id uuid PK`; `ruleset_version_id uuid not null FK`; `event_type
+  text` (closed 22-metric registry, see `FANTASY.md` §1.1); `role_scope text
+  null` (`batting|bowling|fielding|participation`); `points numeric(6,2)`;
+  `condition jsonb null` (operator/unit/min/max/tiers/cap/min-balls/min-overs).
+- **Unique:** `(ruleset_version_id, role_scope, event_type,
+  condition_hash)` — `ux_fpr` (condition_hash is a GeneratedField), so
+  identical-condition rules cannot be stored twice on one version/scope.
+
+### 5.4 PlayerMatchPerformance (DRV)
+- **Fields:** `id uuid PK`; `match_id uuid FK`; `player_id uuid FK`;
+  `ruleset_version_id uuid FK`; `total_points numeric(8,2)`;
+  `breakdown jsonb` (per-metric points); `is_playing_xi bool`;
+  `revision` (bumped on refresh); `computed_at`; `calc_run FK`;
+  `is_partial bool`; `unsupported_rules jsonb`.
 - **Unique:** `(match_id, player_id, ruleset_version_id)`.
-- **Class:** DRV.
+- Derived read model — refreshed in place (bumped `revision`); the ledger is
+  the append-only record of how totals were built.
 
-### 5.5 FantasyPointsLedger (immutable)
-- **Fields:** `id uuid PK`; `match_id uuid`; `player_id uuid`; `ruleset_version_id uuid`; `delta numeric(8,2)`; `event_type text`; `reason text`; `created_at`; `created_by`.
-- Append-only; the sum of deltas = `PlayerMatchPerformance.total_points`.
-- **Class:** derived/audit.
+### 5.5 FantasyPointsLedger (append-only audit)
+- **Fields:** `id uuid PK`; `match_id uuid`; `player_id uuid`;
+  `ruleset_version_id uuid`; `delta numeric(8,2)`; `event_type text`;
+  `reason text`; `created_at`; `calc_run_id FK`; `is_current bool`;
+  `superseded_by uuid null` (informational).
+- **Append-only:** UPDATE/DELETE blocked by a DB trigger for every role.
+  Current points are **derived** from the latest non-provisional calc run for
+  (match, version); supersession is never a mutation.
 
-### 5.6 FantasyPointAdjustment
-- **Fields:** `id uuid PK`; `match_id uuid`; `player_id uuid`; `delta numeric(8,2)`; `reason text not null`; `adjusted_by uuid`; `created_at`.
+### 5.6 FantasyPointAdjustment (append-only, role-gated)
+- **Fields:** `id uuid PK`; `match_id uuid`; `player_id uuid`;
+  `delta numeric(8,2)` (bounded `|delta| ≤ 1000.00`, 2 dp `ROUND_HALF_UP`,
+  non-zero); `reason text not null`; `reference text not null`;
+  `adjusted_by` (NULL unless the user exposes a `uuid`; identity via audit
+  `actor_label`); `created_at`.
+- Voiding appends an offsetting entry (`reference=<adj id>`); the original is
+  never edited. Combined points = computed + net adjustment.
 
-### 5.7 FantasyCalculationAudit
-- **Fields:** `id uuid PK`; `match_id uuid`; `ruleset_version_id uuid`; `input_digest text` (hash of the input stat snapshot); `output_digest text`; `computed_at`; `engine_version text`; `notes text`.
-- Enables re-computation and dispute resolution.
+### 5.7 FantasyCalcAudit (append-only, reproducibility anchor)
+- **Fields:** `id uuid PK`; `match_id uuid`; `ruleset_version_id uuid`;
+  `input_digest` (snapshot digest); `output_digest`; `snapshot` (compressed
+  canonical rows); `snapshot_digest`; `version_hash`; `engine_version`;
+  `trigger`; `is_provisional bool`; `compute_ms`; `computed_at`.
+- Every run is reproducible: `fantasy_verify` replays the stored snapshot and
+  checks digest + ledger agreement. Provisional runs write only this row.
 
 ---
 
