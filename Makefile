@@ -5,7 +5,7 @@ MANAGE := $(UV) run python manage.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-phasef test-identity test-nocov test-loadtest-smoke lint fmt typecheck imports check shell
+.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-phasef test-phaseh test-identity test-nocov test-loadtest-smoke lint fmt typecheck imports check shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -54,6 +54,12 @@ test-phasef: ## Enforce >=90% line+branch on the Phase F apps; >=95% branch on t
 	$(UV) run pytest -o addopts="" tests/phase_f \
 		--cov-config=.coveragerc-phasef --cov --cov-report=term-missing
 
+test-phaseh: ## Enforce >=90% line on apps/fantasy; >=95% branch on engine/freeze/ledger/adjustments
+	$(UV) run pytest -o addopts="" tests/phase_h \
+		--cov=apps/fantasy --cov-report=term-missing --cov-fail-under=90
+	$(UV) run pytest -o addopts="" tests/phase_h \
+		--cov-config=.coveragerc-phaseh --cov --cov-report=term-missing
+
 test-scoring: ## Enforce >=95% line+branch coverage on the pure scoring engine
 	$(UV) run pytest -o addopts="" tests/scoring -m "not benchmark" \
 		--cov=apps/scoring --cov-branch --cov-report=term-missing --cov-fail-under=95
@@ -84,7 +90,7 @@ typecheck: ## Static type check (mypy)
 imports: ## Enforce import boundaries (import-linter)
 	$(UV) run lint-imports
 
-check: lint typecheck imports test test-scoring test-identity test-phasec test-phasef ## Everything CI enforces
+check: lint typecheck imports test test-scoring test-identity test-phasec test-phasef test-phaseh ## Everything CI enforces
 
 shell: ## Django shell
 	$(MANAGE) shell

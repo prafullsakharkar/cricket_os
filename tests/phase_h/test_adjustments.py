@@ -89,6 +89,71 @@ class TestRoleGate:
             _apply(match, player, actor=None)  # type: ignore[arg-type]
 
 
+class TestActorIdentity:
+    """Actor-identity branches: superuser short-circuit and the UUID column."""
+
+    def test_superuser_user_can_apply(self) -> None:
+        """A superuser is allowed regardless of Group membership (branch: the
+        is_superuser early return in _require_adjustment_role)."""
+        from django.contrib.auth.models import User as AuthUser
+
+        match, team1, _ = make_completed_match()
+        player, _ = add_stat(match, team1, runs=58, balls=42, out=True)
+        make_ruleset_version()
+        superuser = AuthUser.objects.create_superuser(username="adj-super", password="pw")
+
+        adj = _apply(match, player, actor=superuser)
+
+        assert adj.delta == Decimal("5.00")
+        # Stock User has no uuid -> the UUID column stays NULL, label carries identity.
+        assert adj.adjusted_by is None
+        audit = AuditLog.objects.get(entity_id=adj.id)
+        assert audit.actor_label == "adj-super"
+
+    def test_actor_with_valid_uuid_records_adjusted_by(self) -> None:
+        """An actor exposing a valid ``uuid`` populates ``adjusted_by`` (the
+        non-None branch of _actor_uuid)."""
+        import uuid as uuid_mod
+        from types import SimpleNamespace
+
+        match, team1, _ = make_completed_match()
+        player, _ = add_stat(match, team1, runs=58, balls=42, out=True)
+        make_ruleset_version()
+        actor = SimpleNamespace(
+            is_superuser=True,
+            uuid=uuid_mod.uuid4(),
+            username="uuid-actor",
+            groups=object(),
+        )
+
+        adj = _apply(match, player, actor=actor)  # type: ignore[arg-type]
+
+        assert adj.adjusted_by == actor.uuid
+        audit = AuditLog.objects.get(entity_id=adj.id)
+        assert audit.actor_label == "uuid-actor"
+
+    def test_actor_with_invalid_uuid_falls_back_to_none(self) -> None:
+        """A malformed uuid is caught (ValueError branch of _actor_uuid) and the
+        column stays NULL."""
+        from types import SimpleNamespace
+
+        match, team1, _ = make_completed_match()
+        player, _ = add_stat(match, team1, runs=58, balls=42, out=True)
+        make_ruleset_version()
+        actor = SimpleNamespace(
+            is_superuser=True,
+            uuid="not-a-uuid",
+            username="bad-uuid",
+            groups=object(),
+        )
+
+        adj = _apply(match, player, actor=actor)  # type: ignore[arg-type]
+
+        assert adj.adjusted_by is None
+        audit = AuditLog.objects.get(entity_id=adj.id)
+        assert audit.actor_label == "bad-uuid"
+
+
 class TestValidation:
     def test_delta_is_bounded(self) -> None:
         match, team1, _ = make_completed_match()

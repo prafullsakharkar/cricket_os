@@ -73,6 +73,33 @@ def test_backfill_resumes_after_a_crash() -> None:
     assert FantasyCalcAudit.objects.filter(match_id=match2.id).exists()
 
 
+def test_backfill_scope_requires_ids() -> None:
+    for scope in ("match", "player", "series"):
+        with pytest.raises(CommandError):
+            _run("fantasy_backfill", scope)
+
+
+def test_backfill_all_rejects_ids() -> None:
+    import uuid as uuid_mod
+
+    with pytest.raises(CommandError):
+        _run("fantasy_backfill", "all", "--ids", str(uuid_mod.uuid4()))
+
+
+def test_backfill_rejects_malformed_since() -> None:
+    with pytest.raises(CommandError):
+        _run("fantasy_backfill", "all", "--since", "not-a-date")
+
+
+def test_backfill_since_filters_matches() -> None:
+    match, team1, _ = make_completed_match()
+    add_stat(match, team1, runs=10, balls=6)
+    make_ruleset_version()
+
+    output = _run("fantasy_backfill", "all", "--since", "2030-01-01")
+    assert "recomputed 0 matches" in output
+
+
 def test_verify_clean_ledger_exits_zero() -> None:
     match, team1, _ = make_completed_match()
     add_stat(match, team1, runs=58, balls=42, out=True)

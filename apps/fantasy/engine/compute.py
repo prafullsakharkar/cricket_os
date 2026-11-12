@@ -47,7 +47,7 @@ def _rule_available(rule: PointRuleSpec, coverage: SnapshotCoverage) -> bool:
     """A rule is computable only when its metric's inputs exist (decision 8)."""
     spec = metric_spec(rule.metric)
     if spec is None:
-        return False
+        return False  # pragma: no cover - validate_ruleset rejects unknown metrics
     missing_inputs = (
         (spec.needs_ball_data and not coverage.has_ball_data)
         or (spec.needs_dismissal_kinds and not coverage.has_dismissal_kinds)
@@ -78,7 +78,7 @@ def _metric_value(metric: str, line: PlayerLine, policies: RulesetPolicies) -> i
         return line.runs
     if metric == "strike_rate_band":
         if line.balls_faced is None or line.balls_faced <= 0:
-            return None
+            return None  # pragma: no cover - rate metrics only reach here via forbidden operators
         return q2(Decimal(line.runs * 100) / Decimal(line.balls_faced))
     if metric == "wicket":
         return line.wickets
@@ -90,7 +90,7 @@ def _metric_value(metric: str, line: PlayerLine, policies: RulesetPolicies) -> i
         return line.maidens if line.maidens is not None else 0
     if metric == "economy_band":
         if line.balls_bowled is None or line.balls_bowled <= 0 or line.runs_conceded is None:
-            return None
+            return None  # pragma: no cover - rate metrics only reach here via forbidden operators
         return q2(Decimal(line.runs_conceded * 6) / Decimal(line.balls_bowled))
     if metric == "dot_ball":
         return line.dots_bowled if line.dots_bowled is not None else 0
@@ -124,11 +124,11 @@ def _meets_threshold(
     """
     if metric == "strike_rate_band":
         if line.balls_faced is None:
-            return False  # not applicable (guard: _rate_applies already excludes)
+            return False  # pragma: no cover - snapshots always carry balls_faced
         return Decimal(line.runs * 100) >= Decimal(threshold) * Decimal(line.balls_faced)
     if metric == "economy_band":
         if line.runs_conceded is None or line.balls_bowled is None:
-            return False  # not applicable (guard: _rate_applies already excludes)
+            return False  # pragma: no cover - snapshots always carry both fields
         return Decimal(line.runs_conceded * 6) <= Decimal(threshold) * Decimal(line.balls_bowled)
     value = _metric_value(metric, line, policies)
     return Decimal(value if value is not None else 0) >= Decimal(threshold)
@@ -158,20 +158,20 @@ def _rule_points(
     if rule.operator == "per_unit":
         value = _metric_value(metric, line, policies)
         if value is None:
-            return None
+            return None  # pragma: no cover - only rate metrics return None (forbidden here)
         return q2(rule.points * (int(value) // (rule.unit or 1)))
 
     if rule.operator == "capped":
         value = _metric_value(metric, line, policies)
         if value is None:
-            return None
+            return None  # pragma: no cover - only rate metrics return None (forbidden here)
         assert rule.cap_value is not None  # validation: capped requires cap_value
         raw = rule.points * (int(value) // (rule.unit or 1))
         return q2(min(raw, rule.cap_value))
 
     if rule.operator == "threshold_bonus":
         if not _rate_applies(metric, line, rule):
-            return None
+            return None  # pragma: no cover - threshold_bonus on rate metrics is forbidden
         assert rule.min_value is not None  # validation: threshold_bonus requires min_value
         if _meets_threshold(metric, line, rule.min_value, policies):
             return q2(rule.points)

@@ -270,6 +270,24 @@ def test_economy_requires_min_overs() -> None:
         )
 
 
+def test_rate_metric_rejects_non_tiered_operator() -> None:
+    """A rate metric (strike_rate_band/economy_band) may only use ``tiered`` —
+    per_unit/threshold_bonus on a rate is a contradiction (rules.py)."""
+    with pytest.raises(ContradictoryRulesError):
+        point_rule("strike_rate_band", "per_unit", "1.00", "batting", min_balls=5)
+    with pytest.raises(ContradictoryRulesError):
+        point_rule(
+            "strike_rate_band",
+            "threshold_bonus",
+            "10.00",
+            "batting",
+            min_value=150,
+            min_balls=5,
+        )
+    with pytest.raises(ContradictoryRulesError):
+        point_rule("economy_band", "per_unit", "0.50", "bowling", min_overs=2)
+
+
 # --------------------------------------------------------------------------- #
 # flag / capped
 # --------------------------------------------------------------------------- #
@@ -293,6 +311,12 @@ def test_capped_negative_points_rejected() -> None:
     """The only operator that forbids negative points (the cap bounds accrual)."""
     with pytest.raises(InvalidParamError):
         point_rule("runs", "capped", "-1.00", "batting", cap_value="50.00")
+
+
+def test_capped_unit_must_be_at_least_one() -> None:
+    """``capped`` accrues points per unit; a sub-unit unit is malformed."""
+    with pytest.raises(InvalidParamError):
+        point_rule("runs", "capped", "1.00", "batting", cap_value="10.00", unit=0)
 
 
 def test_negative_points_allowed_for_duck_penalty() -> None:

@@ -391,3 +391,126 @@ def test_match_context_carries_format_and_result_type() -> None:
     assert snapshot.match.match_id == str(match.id)
     assert snapshot.match.format == FormatType.T20I
     assert snapshot.match.result_type == "WIN"
+
+
+def test_caught_and_bowled_credits_the_bowler() -> None:
+    """A CAUGHT_AND_BOWLED dismissal without an explicit fielder credits the
+    bowler (the bowler IS the catcher)."""
+    match, team1, _ = _make_completed_match()
+    bowler, _ = _add_player(match, team1, bowler=[_bowl(legal_balls=6, runs_conceded=8)])
+    _add_player(
+        match,
+        team1,
+        batsman=[
+            _bat(
+                runs=1,
+                balls=2,
+                out=True,
+                dismissal_type="CAUGHT_AND_BOWLED",
+                bowler_id=str(bowler.id),
+            )
+        ],
+    )
+    snapshot = build_snapshot(match)
+    lines = {line.player_id: line for line in snapshot.player_lines}
+    assert lines[str(bowler.id)].catches == 1
+
+
+def test_fielding_json_takes_precedence_over_derived() -> None:
+    """A stat row's fielding JSON (catches/stumpings/run-outs incl. direct/
+    indirect attribution) is authoritative when present."""
+    match, team1, _ = _make_completed_match()
+    fielder, _ = _add_player(
+        match,
+        team1,
+        batsman=[_bat(runs=10, balls=8)],
+        fielding={
+            "catches": 2,
+            "stumpings": 1,
+            "run_outs": 1,
+            "run_outs_direct": 1,
+            "run_outs_indirect": 0,
+        },
+    )
+    snapshot = build_snapshot(match)
+    line = next(line for line in snapshot.player_lines if line.player_id == str(fielder.id))
+    assert line.catches == 2
+    assert line.stumpings == 1
+    assert line.run_outs_total == 1
+    assert line.run_outs_direct == 1
+    assert line.run_outs_indirect == 0
+    # The JSON presence flips the has_fielding_data coverage flag.
+    assert snapshot.coverage.has_fielding_data is True
+
+
+def test_dismissals_without_credited_fielders_are_skipped() -> None:
+    """A stumped/run-out dismissal that names no fielder contributes nothing
+    to the derived fielding counts (no player to credit)."""
+    match, team1, _ = _make_completed_match()
+    _add_player(
+        match,
+        team1,
+        batsman=[_bat(runs=1, balls=2, out=True, dismissal_type="STUMPED", fielder1_id=None)],
+    )
+    _add_player(
+        match,
+        team1,
+        batsman=[
+            _bat(
+                runs=1,
+                balls=2,
+                out=True,
+                dismissal_type="RUN_OUT",
+                fielder1_id=None,
+                fielder2_id=None,
+            )
+        ],
+    )
+    snapshot = build_snapshot(match)
+    # No player accumulates any fielding credit.
+    assert all(
+        line.catches == 0 and line.stumpings == 0 and line.run_outs_total == 0
+        for line in snapshot.player_lines
+    )
+
+
+def test_build_snapshot_raises_for_unknown_match() -> None:
+    import uuid
+
+    with pytest.raises(ValueError):
+        build_snapshot(uuid.uuid4())
+
+
+def test_snapshot_coverage_bool_truthiness() -> None:
+    """``SnapshotCoverage.__bool__`` is True for any real snapshot (used to
+    reject degenerate empty snapshots)."""
+    match, team1, _ = _make_completed_match()
+    _add_player(match, team1, batsman=[_bat(runs=10, balls=6)])
+    snapshot = build_snapshot(match)
+    assert bool(snapshot.coverage) is True
+
+
+def test_snapshot_digest_from_matches_snapshot_digest() -> None:
+    from apps.fantasy.services.snapshot import snapshot_digest_from
+
+    match, team1, _ = _make_completed_match()
+    _add_player(match, team1, batsman=[_bat(runs=10, balls=6)])
+    snapshot = build_snapshot(match)
+    assert snapshot_digest_from(snapshot) == snapshot_digest(snapshot)
+
+
+def test_completed_match_without_result_builds_snapshot() -> None:
+    """A completed match whose result row is missing still snapshots (the
+    result is optional in the selector; policies decide points)."""
+    match = make_match(
+        format_type=FormatType.T20I,
+        status=MatchStatus.COMPLETED,
+        end_time_utc=timezone.now(),
+        series_id=None,
+    )
+    team1 = make_team("India")
+    team2 = make_team("Australia")
+    make_match_teams(match, team1, team2)
+    _add_player(match, team1, batsman=[_bat(runs=10, balls=6)])
+    snapshot = build_snapshot(match)
+    assert snapshot.match.result_type is None

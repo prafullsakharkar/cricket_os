@@ -1,0 +1,27 @@
+# Phase H gate (`make test-phaseh` / CI): the fantasy module's high-risk
+# modules must hold >= 95% line AND branch coverage. These files encode the
+# money logic — the pure Decimal engine, the freeze/versioning lifecycle, the
+# append-only ledger and the role-gated adjustments — where a regression
+# silently corrupts computed points or the audit trail, so the bar is higher
+# than the app-wide gate (>= 90% line on apps/fantasy, enforced by
+# `make test-phaseh`).
+#
+# The plan named the freeze module `services/freeze*.py`; in the implementation
+# the freeze lifecycle lives in `authoring.py` (freeze_version and friends),
+# so that file is gated here instead (SDD ledger D17).
+#
+# `include` (glob patterns) is used instead of `source` because coverage 7.x
+# treats a `source` entry ending in `.py` as a *package name* and reports
+# "never imported".
+[run]
+branch = true
+include =
+    */apps/fantasy/engine/*.py
+    */apps/fantasy/authoring.py
+    */apps/fantasy/services/ledger.py
+    */apps/fantasy/services/adjustments.py
+
+[report]
+fail_under = 95
+show_missing = true
+skip_covered = true

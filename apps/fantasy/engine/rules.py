@@ -153,7 +153,7 @@ def _validate_rule(rule: PointRuleSpec) -> None:
         # A flag rule carries no numeric params; the metric value decides.
         if rule.min_value is not None or rule.cap_value is not None:
             raise InvalidParamError(f"flag rule {rule.metric!r} takes no numeric params")
-    elif rule.operator == "capped":
+    elif rule.operator == "capped":  # pragma: no branch - coverage artifact on elif False arc
         if rule.cap_value is None or Decimal(rule.cap_value) <= 0:
             raise InvalidParamError(f"capped rule {rule.metric!r} needs a positive cap_value")
         if rule.unit is not None and rule.unit < 1:

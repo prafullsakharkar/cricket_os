@@ -8,10 +8,13 @@ is_partial on player_match_performance)."""
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.db.utils import DatabaseError
+from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
@@ -304,3 +307,89 @@ def test_fantasy_tables_reverse_cleanly() -> None:
     with connection.cursor() as cursor:
         for table in TABLES:
             assert _table_exists(cursor, table), f"table {table} missing after reapply"
+
+
+def test_every_model_has_a_string_representation() -> None:
+    """Every fantasy model's ``__str__`` renders (admin + logging use it)."""
+    from apps.fantasy.models import (
+        FantasyCalcAudit,
+        FantasyPointRule,
+        FantasyPointsLedger,
+        FantasyRuleset,
+        FantasyRulesetVersion,
+        PlayerMatchPerformance,
+    )
+    from apps.fantasy.services import recompute
+
+    from .factories import add_stat, make_completed_match, make_ruleset_version
+
+    ruleset = FantasyRuleset.objects.create(name="str test", provider_scope="generic")
+    version = FantasyRulesetVersion.objects.create(
+        ruleset=ruleset,
+        version=1,
+        effective_from=timezone.now(),
+        policies={},
+    )
+    assert str(ruleset) == "str test"
+    assert str(version) == f"{ruleset.id} v1"
+
+    rule = FantasyPointRule.objects.create(
+        ruleset_version=version,
+        event_type="runs",
+        role_scope="batting",
+        points=Decimal("1.00"),
+        condition={"operator": "per_unit"},
+    )
+    assert "runs/batting@1.00" in str(rule)
+
+    # The recompute path needs a valid auto-recompute version.
+    match, team1, _ = make_completed_match()
+    add_stat(match, team1, runs=58, balls=42, out=True)
+    make_ruleset_version(auto_recompute=True)
+    recompute.recompute_match(match)
+    audit = FantasyCalcAudit.objects.get(match_id=match.id)
+    assert str(audit) == f"{match.id} {audit.ruleset_version_id}"
+
+    perf = PlayerMatchPerformance.objects.get(match_id=match.id)
+    assert str(perf) == f"{perf.player_id} {match.id} {perf.ruleset_version_id}"
+
+    ledger_row = FantasyPointsLedger.objects.get(match_id=match.id)
+    assert str(ledger_row) == f"{match.id} {ledger_row.player_id} {ledger_row.delta}"
+
+    from django.contrib.auth.models import Group, User
+
+    from apps.fantasy.services import adjustments
+
+    user = User.objects.create_user(username="str-admin", password="pw")
+    user.groups.add(Group.objects.get(name="admin"))
+    adj = adjustments.apply_adjustment(
+        match_id=match.id,
+        player_id=perf.player_id,
+        delta=Decimal("1.00"),
+        reason="str test",
+        reference="REF-STR",
+        actor=user,
+    )
+    assert str(adj) == f"{match.id} {perf.player_id} {adj.delta}"
+
+
+def test_condition_hash_expression_deconstructs() -> None:
+    """The generated-column expression round-trips through ``deconstruct``
+    (used by the migration framework when it re-renders the field)."""
+    from apps.fantasy.expressions import ConditionHashExpression
+
+    expr = ConditionHashExpression()
+    path, args, kwargs = expr.deconstruct()
+    assert path.endswith("ConditionHashExpression")
+    assert args == []
+    assert kwargs == {}
+
+
+def test_fantasy_app_ready_is_idempotent() -> None:
+    """Calling ``ready()`` again hits the _ready_done guard (no re-register)."""
+    from django.apps import apps as django_apps
+
+    config = django_apps.get_app_config("fantasy")
+    assert config._ready_done is True  # already ran at startup
+    config.ready()  # second call returns via the guard
+    assert config._ready_done is True

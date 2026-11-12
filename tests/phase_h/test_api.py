@@ -36,7 +36,7 @@ from apps.players.models import PlayerMerge
 from apps.statistics.models import PlayerMatchStat
 
 from ..phase_c.factories import make_player
-from .factories import add_stat, make_completed_match
+from .factories import add_stat, make_completed_match, make_ruleset_version
 
 pytestmark = pytest.mark.django_db
 
@@ -384,6 +384,98 @@ class TestMatchPoints:
         response = api_client.get(f"/api/v1/fantasy/matches/{uuid_mod.uuid4()}")
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "not_found"
+
+
+class TestCoverageBranches:
+    """API branches the golden tests don't reach (Task 10 gate)."""
+
+    def test_malformed_player_param_is_400_not_301(self, api_client: object) -> None:
+        """A non-uuid ``?player=`` falls through the merged-redirect check and
+        the normal validation answers 400 invalid_query."""
+        response = api_client.get("/api/v1/fantasy/points?player=not-a-uuid")
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "invalid_query"
+
+    def test_version_detail_unknown_ruleset_404(self, api_client: object) -> None:
+        import uuid as uuid_mod
+
+        response = api_client.get(f"/api/v1/fantasy/rulesets/{uuid_mod.uuid4()}/versions/1")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+    def test_version_detail_unknown_version_404(self, api_client: object) -> None:
+        _match, _team1, _player, ruleset, _version = _seed()
+        response = api_client.get(f"/api/v1/fantasy/rulesets/{ruleset.id}/versions/99")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+    def test_malformed_ruleset_version_param_404(self, api_client: object) -> None:
+        """A non-uuid ``?ruleset_version=`` cannot be a public version -> 404."""
+        response = api_client.get("/api/v1/fantasy/points?ruleset_version=not-a-uuid")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+    def test_match_presented_under_latest_calc_run_version(self, api_client: object) -> None:
+        """With no frozen default, the primary version falls back to the latest
+        non-provisional calc run's version (a draft, computed on demand)."""
+        match, team1, _ = make_completed_match()
+        add_stat(match, team1, runs=58, balls=42, out=True)
+        # A draft (auto-recompute) version with NO frozen default.
+        _, version = make_ruleset_version(auto_recompute=True)
+        recompute.recompute_match(match)
+
+        response = api_client.get(f"/api/v1/fantasy/matches/{match.id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["data"]["version"]["id"] == str(version.id)
+        assert body["data"]["players"][0]["total_points"] == "58.00"
+
+    def test_match_without_public_version_returns_empty_payload(self, api_client: object) -> None:
+        """A completed match with no frozen default and no calc runs has no
+        primary version: the endpoint answers an explicit empty payload."""
+        match, team1, _ = make_completed_match()
+        add_stat(match, team1, runs=58, balls=42, out=True)
+        # No ruleset version at all -> no frozen default, no calc run.
+
+        response = api_client.get(f"/api/v1/fantasy/matches/{match.id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["data"]["version"] is None
+        assert body["data"]["players"] == []
+        assert body["meta"]["status"] is None
+        assert body["meta"]["calc_run_id"] is None
+
+    def test_points_row_without_calc_run_has_null_identity(self, api_client: object) -> None:
+        """A read-model row not produced by a calc run (calc_run NULL) renders
+        status None instead of guessing final/provisional."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.fantasy.models import PlayerMatchPerformance
+
+        match, _team1, _player, _ruleset, version = _seed()
+        extra, _ = add_stat(match, _team1, runs=10, balls=6, out=True)
+        PlayerMatchPerformance.objects.create(
+            match_id=match.id,
+            player_id=extra.id,
+            ruleset_version_id=version.id,
+            total_points=10,
+            breakdown={"runs": "10.00"},
+            computed_at=timezone.now() + timedelta(days=1),  # latest row
+        )
+
+        response = api_client.get(f"/api/v1/fantasy/points?match={match.id}")
+
+        assert response.status_code == 200
+        rows = {row["player_id"]: row for row in response.json()["data"]}
+        assert rows[str(extra.id)]["status"] is None
+        assert rows[str(extra.id)]["calc_run_id"] is None
+        # The meta summarises the latest row -> the calc-run-less one.
+        assert response.json()["meta"]["status"] is None
+        assert response.json()["meta"]["calc_run_id"] is None
 
 
 # --------------------------------------------------------------------------- #

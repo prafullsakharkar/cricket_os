@@ -345,3 +345,108 @@ class TestRetire:
             with pytest.raises(PermissionError):
                 authoring.retire_version(version, actor=_make_user(role))
         assert FantasyRulesetVersion.objects.count() == 1
+
+
+class TestCoverageBranches:
+    """Branches the lifecycle tests don't reach (Task 10 gate)."""
+
+    def test_create_ruleset_requires_nonempty_name(self) -> None:
+        with pytest.raises(authoring.AuthoringError):
+            authoring.create_ruleset(name="  ")
+
+    def test_freeze_requires_an_actor(self) -> None:
+        with pytest.raises(PermissionError):
+            authoring.freeze_version(_create_version(), actor=None)
+
+    def test_freeze_allows_superuser(self) -> None:
+        superuser = User.objects.create_superuser(username="author-super", password="pw")
+        frozen = authoring.freeze_version(_create_version(), actor=superuser)
+        assert frozen.is_frozen is True
+
+    def test_actor_uuid_handling_on_create_ruleset(self) -> None:
+        import uuid as uuid_mod
+        from types import SimpleNamespace
+
+        valid = authoring.create_ruleset(
+            name="uuid-ok", actor=SimpleNamespace(uuid=uuid_mod.uuid4())
+        )
+        assert valid.created_by is not None
+        invalid = authoring.create_ruleset(
+            name="uuid-bad", actor=SimpleNamespace(uuid="not-a-uuid")
+        )
+        assert invalid.created_by is None
+
+    def test_create_version_explicit_args_and_full_conditions(self) -> None:
+        from datetime import UTC, datetime
+
+        ruleset = authoring.create_ruleset(name="branches", actor=_admin())
+        version = authoring.create_version(
+            ruleset=ruleset,
+            rules=(
+                point_rule("runs", "per_unit", "1.00", "batting", unit=2),
+                point_rule(
+                    "runs", "threshold_bonus", "10.00", "batting", min_value=50, max_value=100
+                ),
+                point_rule(
+                    "runs",
+                    "tiered",
+                    "1.00",
+                    "batting",
+                    tiers=[(0, 1), (50, 2)],
+                    tier_mode="cumulative",
+                ),
+                point_rule(
+                    "strike_rate_band",
+                    "tiered",
+                    "1.00",
+                    "batting",
+                    tiers=[(100, 1)],
+                    tier_mode="highest_only",
+                    min_balls=10,
+                ),
+                point_rule(
+                    "economy_band",
+                    "tiered",
+                    "1.00",
+                    "bowling",
+                    tiers=[(10, 1)],
+                    tier_mode="highest_only",
+                    min_overs=2,
+                ),
+                point_rule("wicket", "capped", "20.00", "bowling", cap_value="100.00"),
+            ),
+            version_number=7,
+            effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+            auto_recompute=False,
+            actor=_admin(),
+        )
+        assert version.version == 7
+        assert version.auto_recompute is False
+        # Two rules share ``runs`` (per_unit + threshold_bonus) — key by
+        # (event_type, operator) so neither overwrites the other.
+        conditions = {
+            (rule.event_type, (rule.condition or {}).get("operator")): rule.condition or {}
+            for rule in version.point_rules.all()
+        }
+        assert conditions[("runs", "per_unit")]["unit"] == 2
+        assert conditions[("runs", "threshold_bonus")]["min_value"] == 50
+        assert conditions[("runs", "threshold_bonus")]["max_value"] == 100
+        assert conditions[("runs", "tiered")]["tiers"] == [[0, "1"], [50, "2"]]
+        assert conditions[("runs", "tiered")]["tier_mode"] == "cumulative"
+        assert conditions[("strike_rate_band", "tiered")]["min_balls"] == 10
+        assert conditions[("economy_band", "tiered")]["min_overs"] == 2
+        assert conditions[("wicket", "capped")]["cap_value"] == "100.00"
+
+    def test_freeze_rejects_retired_draft(self) -> None:
+        version = _create_version()
+        version.status = RulesetVersionStatus.RETIRED
+        version.save(update_fields=["status"])
+        with pytest.raises(authoring.AuthoringError):
+            authoring.freeze_version(version, actor=_admin())
+
+    def test_set_default_rejects_retired_draft(self) -> None:
+        version = _create_version()
+        version.status = RulesetVersionStatus.RETIRED
+        version.save(update_fields=["status"])
+        with pytest.raises(authoring.AuthoringError):
+            authoring.set_default_version(version, actor=_admin())
