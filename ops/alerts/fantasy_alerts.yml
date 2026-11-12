@@ -1,0 +1,59 @@
+# Fantasy pipeline alert rules (Phase H Task 8).
+#
+# Every alert maps to a runbook in docs/RUNBOOKS.md (## Fantasy pipeline).
+# Thresholds are configuration, not code — tune here, redeploy the rule group,
+# never touch a service. Metric names come from apps/fantasy/metrics.py (the
+# in-process facade renders the same names through apps/core/metrics.py).
+#
+# NOTE: this is a static rule file for the Prometheus-compatible operator.
+# `prometheus_client` is not installed in the offline build image, so these
+# rules are validated by tests/phase_h/test_observability.py and
+# tests/phase_d/test_observability.py (YAML parse + metric-name/runbook
+# cross-checks) rather than by a live Prometheus here.
+groups:
+  - name: fantasy_pipeline
+    rules:
+      # The sweep observed a large backlog of completed matches whose latest
+      # fantasy calc run is missing or stale (watermark semantics, mirroring
+      # StatisticsWatermarkLagHigh). A sustained value means the sweep is not
+      # keeping up (or is not scheduled) — points served are last-known-good.
+      - alert: FantasyStaleCalc
+        expr: |
+          fantasy_recompute_lag > 50
+        for: 30m
+        labels:
+          severity: warning
+          runbook: "fantasy pipeline"
+        annotations:
+          summary: "Fantasy recompute backlog is high"
+          description: "{{ $value }} completed matches are missing or stale fantasy calc runs. See runbook: fantasy pipeline."
+
+      # A fantasy recompute_match call raised. The pipeline fails loudly
+      # (never guesses), so a burst means the ruleset/engine or source data is
+      # broken and points are stale for the affected matches.
+      - alert: FantasyRecomputeFailures
+        expr: |
+          increase(fantasy_recompute_failures_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook: "fantasy pipeline"
+        annotations:
+          summary: "Fantasy recomputes are failing"
+          description: "A fantasy recompute call raised in the last 15m. Points may be stale. See runbook: fantasy pipeline."
+
+      # fantasy_verify found the calc trail does not reproduce its stored
+      # results (audit replay, snapshot digest or current-ledger disagreement).
+      # The append-only invariant means this is corruption or a bug, never a
+      # normal supersession — an operator must adjudicate before more points
+      # are served.
+      - alert: FantasyVerifyMismatch
+        expr: |
+          increase(fantasy_verify_mismatches_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          runbook: "fantasy pipeline"
+        annotations:
+          summary: "Fantasy calc trail does not reproduce"
+          description: "fantasy_verify recorded mismatches against the append-only trail. See runbook: fantasy pipeline."

@@ -59,6 +59,16 @@ def test_metrics_endpoint_serves_prometheus_exposition() -> None:
         "search_queries_total",
         "search_timeouts_total",
         "search_latency_seconds",
+        # Phase H fantasy surfaces.
+        "fantasy_recompute_lag",
+        "fantasy_queue_depth",
+        "fantasy_sweep_findings",
+        "fantasy_recompute_seconds",
+        "fantasy_recompute_failures_total",
+        "fantasy_partial_rate",
+        "fantasy_unsupported_rule_counts",
+        "fantasy_ledger_growth",
+        "fantasy_verify_mismatches_total",
     ):
         assert name in body
     assert "# TYPE" in body  # exposition format, not JSON
@@ -135,6 +145,11 @@ _ALERT_FILES: dict[str, set[str]] = {
         "LeaderboardRebuildStorm",
         "SearchTimeoutHigh",
         "RankingsImportStalled",
+    },
+    "ops/alerts/fantasy_alerts.yml": {
+        "FantasyStaleCalc",
+        "FantasyRecomputeFailures",
+        "FantasyVerifyMismatch",
     },
 }
 

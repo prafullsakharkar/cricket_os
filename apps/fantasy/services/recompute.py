@@ -52,6 +52,7 @@ from apps.core.events import (
     TOPIC_MATCH_COMPLETED,
     TOPIC_PLAYER_MERGED,
 )
+from apps.fantasy import metrics
 from apps.fantasy.engine import (
     FantasyResult,
     PointRuleSpec,
@@ -405,15 +406,30 @@ def recompute_match(
         raise ProvisionalDisabledError(
             "provisional recomputes are disabled (FANTASY_PROVISIONAL_ENABLED=false)"
         )
-    with transaction.atomic():
-        _take_advisory_lock(f"fantasy:{match.id}")
-        locked = Match.objects.select_for_update().get(pk=match.id)
-        snapshot = build_snapshot(locked)
-        versions = _versions_for(locked, version_id=version_id)
-        reports = [
-            _compute_one(locked, version, snapshot, provisional=provisional, trigger=trigger)
-            for version in versions
-        ]
+    started = time.perf_counter()
+    try:
+        with transaction.atomic():
+            _take_advisory_lock(f"fantasy:{match.id}")
+            locked = Match.objects.select_for_update().get(pk=match.id)
+            snapshot = build_snapshot(locked)
+            versions = _versions_for(locked, version_id=version_id)
+            reports = [
+                _compute_one(locked, version, snapshot, provisional=provisional, trigger=trigger)
+                for version in versions
+            ]
+    except Exception:
+        metrics.FANTASY_RECOMPUTE_FAILURES.inc()
+        raise
+    finally:
+        metrics.FANTASY_RECOMPUTE_SECONDS.observe(time.perf_counter() - started)
+    if reports:
+        metrics.FANTASY_PARTIAL_RATE.set(
+            sum(1 for report in reports if report.is_partial) / len(reports)
+        )
+        for name in sorted(
+            set(itertools.chain.from_iterable(report.unsupported_rules for report in reports))
+        ):
+            metrics.FANTASY_UNSUPPORTED_RULE_COUNTS.labels(metric=name).inc()
     return _merge_reports(locked, reports, trigger=trigger, provisional=provisional)
 
 
@@ -462,6 +478,8 @@ def sweep_stale_fantasy() -> int:
         .order_by("start_time_utc", "id")
     )
     healed = 0
+    stale_found = 0
+    partial_healed = 0
     for match in matches:
         snapshot = build_snapshot(match)
         for version in versions:
@@ -472,8 +490,17 @@ def sweep_stale_fantasy() -> int:
                 or latest.version_hash != version_hashes[version.id]
                 or latest.engine_version != settings.FANTASY_ENGINE_VERSION
             ):
-                recompute_match(match, version_id=version.id, trigger="sweep")
+                stale_found += 1
+                report = recompute_match(match, version_id=version.id, trigger="sweep")
                 healed += 1
+                if report.is_partial:
+                    partial_healed += 1
+    # Watermark semantics (mirrors statistics_watermark_lag): the backlog this
+    # sweep observed; a healthy pipeline re-stamps 0 on its next run.
+    metrics.FANTASY_RECOMPUTE_LAG.set(stale_found)
+    metrics.FANTASY_SWEEP_FINDINGS.set(healed)
+    if healed:
+        metrics.FANTASY_PARTIAL_RATE.set(partial_healed / healed)
     return healed
 
 
@@ -541,6 +568,8 @@ def verify_fantasy(scope: str = "all", *, ids: list[str] | None = None) -> list[
                             f"match {match.id}: ledger for player {player.player_id} = "
                             f"{total}, expected {player.total}"
                         )
+    if mismatches:
+        metrics.FANTASY_VERIFY_MISMATCHES.inc(len(mismatches))
     return mismatches
 
 

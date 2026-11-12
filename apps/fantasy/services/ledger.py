@@ -23,6 +23,7 @@ from uuid import UUID
 from django.db.models import Sum
 from django.db.models.query import QuerySet
 
+from apps.fantasy import metrics
 from apps.fantasy.models import FantasyCalcAudit, FantasyPointsLedger
 
 #: Ledger rows written for an engine result carry this event_type so the
@@ -67,7 +68,9 @@ def append_run(audit: FantasyCalcAudit, result: Any) -> list[FantasyPointsLedger
         )
         for player in result.players
     ]
-    return FantasyPointsLedger.objects.bulk_create(rows)
+    created = FantasyPointsLedger.objects.bulk_create(rows)
+    metrics.FANTASY_LEDGER_GROWTH.inc(len(created))
+    return created
 
 
 def current_rows(

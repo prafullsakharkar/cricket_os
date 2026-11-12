@@ -464,3 +464,88 @@ never computed here, so the fix is operational, not algorithmic.
 
 **Verification.** `rankings_import_rows_total` resumes its daily increments;
 `/rankings` `meta.as_of_date` advances.
+
+# Fantasy runbooks (Phase H)
+
+## Fantasy pipeline
+
+**Symptoms.** `FantasyStaleCalc`, `FantasyRecomputeFailures`,
+`FantasyVerifyMismatch`.
+
+**Detection.** `fantasy_recompute_lag` (completed matches whose latest calc
+run is missing/stale, stamped by the sweep) / `fantasy_recompute_failures_total`
+/ `fantasy_verify_mismatches_total` / `fantasy_sweep_findings` /
+`fantasy_recompute_seconds` (histogram) / `fantasy_partial_rate` /
+`fantasy_unsupported_rule_counts{metric=...}` / `fantasy_ledger_growth` /
+`fantasy_queue_depth`.
+
+**Impact.** Fantasy points are **computed, never guessed**: every run rebuilds
+the snapshot from the canonical rows and re-runs the pure engine. When the
+pipeline is behind, the API serves last-known-good points (`meta.calc_run_id`
+identifies the run; `meta.status` is `final` or `provisional`; `is_partial` +
+`unsupported_rules` say what the source data could not support). A
+`FantasyVerifyMismatch` means the append-only trail no longer reproduces its
+own output — corruption or a bug, not supersession.
+
+**Recovery.**
+
+1. **Failures first.** `FantasyRecomputeFailures` means a `recompute_match`
+   call raised (the pipeline fails loudly). Read the error log for the
+   `ContradictoryRulesError` / `RulesetValidationError` / snapshot failure,
+   fix the ruleset version or the source data, then re-run the affected scope:
+   `python manage.py fantasy_backfill match --ids <uuid>`.
+2. **Backlog.** `FantasyStaleCalc` — confirm the Tier-2 sweep is scheduled,
+   then run `python manage.py sweep_statistics` (the statistics sweep drives
+   the fantasy sweep) or `python manage.py fantasy_backfill all`. Watch
+   `fantasy_recompute_lag` drop to 0 on the next sweep.
+3. **Trail mismatch.** `FantasyVerifyMismatch` — run
+   `python manage.py fantasy_verify all` to reproduce the findings. A
+   frozen-version hash change, a snapshot that no longer replays, or a current
+   ledger row that disagrees with its run is corruption: adjudicate from the
+   audit trail (append-only rows are never edited), never delete or UPDATE a
+   ledger/audit/adjustment row.
+4. **Adjustment reversal.** A wrong adjustment is **voided, never edited**:
+   `apply_adjustment(..., action=fantasy.adjustment.void, reference=<adj id>)`
+   appends the offsetting entry; the original row is untouched (see
+   `apps/fantasy/services/adjustments.py` and the admin action). Re-running
+   `recompute_match` re-folds the net adjustment so the read model agrees.
+5. **Ruleset freeze mistake.** A frozen version is immutable at the database
+   and service level — **never edit it**. Retire it
+   (`retire_version` forks a new draft) and freeze the corrected rules as the
+   next version. The old version stays as the audit anchor for the runs that
+   used it.
+
+**Verification.** `fantasy_recompute_lag == 0` on each sweep;
+`fantasy_recompute_failures_total` flatlines; `fantasy_verify_mismatches_total`
+flatlines; a fresh `fantasy_verify all` exits 0.
+
+## Fantasy points dispute
+
+**Symptoms.** A user reports a player's fantasy points look wrong.
+
+**Detection.** The API response carries the calc identity: `meta.calc_run_id`
+(the run), `meta.ruleset` (id/version/hash), `meta.status`
+(final|provisional), `meta.is_partial` and `meta.unsupported_rules`. The calc
+audit row's stored snapshot + output digest make every run reproducible.
+
+**Impact.** Points are computed under the stated ruleset and are **not any
+third party's official fantasy points** (the API notice). "Wrong" is usually
+a ruleset difference, a partial-data run, or an unsupported rule — not a bug.
+
+**Recovery.**
+
+1. **Identify the run.** From the complaint, get `match_id`, `player_id`,
+   `ruleset_version` and `calc_run_id` (or the API `meta`).
+2. **Reproduce.** `python manage.py fantasy_verify match --ids <match_id>`
+   replays every audit for the match from its stored snapshot. If it exits 0,
+   the computed points are exactly what the ruleset + inputs produced.
+3. **Check the inputs.** `is_partial` + `unsupported_rules` say whether the
+   source data covered the rule's metric; a partial run legitimately omits
+   points. Confirm the ruleset is the one the user expects
+   (`/fantasy/rulesets/{id}/versions/{version}` shows the declarative rules).
+4. **Correct, don't mutate.** A genuine correction is an **adjustment**
+   (append-only, voidable) or a new frozen ruleset version — never an edit to
+   a calc audit or ledger row. Re-run the affected match to re-fold.
+
+**Verification.** `fantasy_verify match --ids <match_id>` exits 0 and the
+adjusted total equals computed + net adjustment.
