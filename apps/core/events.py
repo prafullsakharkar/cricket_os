@@ -48,6 +48,16 @@ TOPIC_INGESTION_COMPLETED = "ingestion.completed"
 TOPIC_INGESTION_FAILED = "ingestion.failed"
 #: Audit-worthy topic: a terminal match was reopened for a provider correction.
 TOPIC_MATCH_REOPENED = "match.reopened"
+#: Audit-worthy topic (Phase I Task 4): a reversible match merge completed.
+#: Payload: ``{"merged_match_id", "canonical_match_id", "actor"}``.
+TOPIC_MATCH_MERGED = "match.merged"
+#: Audit-worthy topic (Phase I Task 4): a match merge was reversed (split).
+#: Payload: ``{"merge_id", "merged_match_id", "canonical_match_id", "actor"}``.
+TOPIC_MATCH_SPLIT = "match.split"
+#: Audit-worthy topic (Phase I Task 4): a match duplicate candidate was
+#: reviewed (confirmed merge or rejected). Payload: ``{"duplicate_candidate_id",
+#: "candidate_match_id", "canonical_match_id", "decision", "actor"}``.
+TOPIC_MATCH_DUP_REVIEWED = "match.dup.reviewed"
 #: Audit-worthy topic: a steward requested a manual correction (queued/approved).
 TOPIC_CORRECTION_REQUESTED = "correction.requested"
 #: Cache invalidation: a match lifecycle/state row changed (Phase E).

@@ -583,7 +583,11 @@ CREATE TABLE cricket.match (
   provider_updated_at timestamptz,
   ingested_at        timestamptz NOT NULL DEFAULT now(),
   last_ingested_at   timestamptz,
-  revision           integer NOT NULL DEFAULT 1
+  revision           integer NOT NULL DEFAULT 1,
+  -- Phase I (Task 4): set when this match row was merged-away into another.
+  -- Merged-away rows are excluded from every selector/statistics read and a
+  -- read of their id 301s to the canonical (docs/MATCH_DEDUPLICATION.md).
+  merged_into_id     uuid REFERENCES cricket.match(id)
 );
 CREATE UNIQUE INDEX ux_match_provider
   ON cricket.match (source_provider_id, provider_match_id)
@@ -593,6 +597,8 @@ CREATE INDEX ix_match_status_start ON cricket.match (status, start_time_utc DESC
 CREATE INDEX ix_match_series ON cricket.match (series_id);
 CREATE INDEX ix_match_venue ON cricket.match (venue_id);
 CREATE INDEX ix_match_local_date ON cricket.match (source_local_date);
+CREATE INDEX ix_match_merged_into ON cricket.match (merged_into_id)
+  WHERE merged_into_id IS NOT NULL;
 
 CREATE TABLE cricket.match_team (
   id          uuid PRIMARY KEY,
@@ -1388,6 +1394,42 @@ CREATE TABLE cricket.audit_log (
 );
 CREATE INDEX ix_audit_entity ON cricket.audit_log (entity_type, entity_id);
 CREATE INDEX ix_audit_created ON cricket.audit_log (created_at DESC);
+
+-- Phase I (Task 4): cross-provider match de-duplication (docs/MATCH_DEDUPLICATION.md).
+-- A scored (candidate, plausible-canonical) pair awaiting steward review; never
+-- auto-merged below the auto threshold. Rejecting closes the pair (status ->
+-- 'rejected'); confirming performs a reversible merge (match_merge below).
+CREATE TABLE cricket.match_duplicate_candidate (
+  id                  uuid PRIMARY KEY,
+  candidate_match_id  uuid NOT NULL REFERENCES cricket.match(id),
+  canonical_match_id  uuid NOT NULL REFERENCES cricket.match(id),
+  score               numeric(4,3) NOT NULL,
+  breakdown           jsonb,
+  status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','rejected')),
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  resolved_at         timestamptz
+);
+CREATE UNIQUE INDEX ux_match_dup_candidate
+  ON cricket.match_duplicate_candidate (candidate_match_id, canonical_match_id);
+CREATE INDEX ix_match_dup_canonical
+  ON cricket.match_duplicate_candidate (canonical_match_id, status);
+
+-- Reversible merge ledger: the exact before/after child-row inventory of one
+-- merge, so split_match can restore the prior state exactly. Append-only:
+-- status transitions 'merged' -> 'split' are the only mutation.
+CREATE TABLE cricket.match_merge (
+  id                 uuid PRIMARY KEY,
+  merged_match_id    uuid NOT NULL UNIQUE REFERENCES cricket.match(id),
+  canonical_match_id uuid NOT NULL REFERENCES cricket.match(id),
+  before             jsonb NOT NULL,
+  after              jsonb NOT NULL,
+  status             text NOT NULL DEFAULT 'merged' CHECK (status IN ('merged','split')),
+  created_by         uuid,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  split_by           uuid,
+  split_at           timestamptz
+);
+CREATE INDEX ix_match_merge_canonical ON cricket.match_merge (canonical_match_id);
 ```
 
 ### 3.9 Example queries the schema must serve fast

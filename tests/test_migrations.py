@@ -144,6 +144,51 @@ def test_seed_migration_backward_removes_rows_and_forward_restores_them(
     assert model.objects.count() == forward_count
 
 
+def test_phase_i_permission_grant_migration_round_trips() -> None:
+    """administration.0007 grants then revokes the match de-dup permissions.
+
+    Forward: admin gets every CRUD perm for the two new models, data_steward
+    view+change, operator view. Backward to 0006: the grants are removed.
+    """
+    Group = django_apps.get_model("auth", "Group")
+    ContentType = django_apps.get_model("contenttypes", "ContentType")
+    Permission = django_apps.get_model("auth", "Permission")
+
+    models = [("matches", "matchduplicatecandidate"), ("matches", "matchmerge")]
+
+    def codenames_for(codenames: tuple[str, ...]) -> set[str]:
+        found: set[str] = set()
+        for app_label, model in models:
+            ct = ContentType.objects.get(app_label=app_label, model=model)
+            found.update(
+                Permission.objects.filter(
+                    content_type=ct, codename__in=[f"{c}_{model}" for c in codenames]
+                ).values_list("codename", flat=True)
+            )
+        return found
+
+    admin = Group.objects.get(name="admin")
+    steward = Group.objects.get(name="data_steward")
+    operator = Group.objects.get(name="operator")
+
+    admin_all = codenames_for(("add", "change", "delete", "view"))
+    assert admin_all <= set(admin.permissions.values_list("codename", flat=True))
+    assert codenames_for(("view", "change")) <= set(
+        steward.permissions.values_list("codename", flat=True)
+    )
+    assert codenames_for(("view",)) <= set(operator.permissions.values_list("codename", flat=True))
+
+    _migrate([("administration", "0006_phase_h_model_permissions")])
+    assert not (admin_all & set(admin.permissions.values_list("codename", flat=True)))
+    assert not (
+        codenames_for(("view", "change"))
+        & set(steward.permissions.values_list("codename", flat=True))
+    )
+
+    _migrate([("administration", "0007_phase_i_model_permissions")])
+    assert admin_all <= set(admin.permissions.values_list("codename", flat=True))
+
+
 def test_full_cycle_on_importer_populated_db() -> None:
     """Full reverse/reapply still works when map rows reference the seed provider.
 

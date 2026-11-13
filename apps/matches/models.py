@@ -20,6 +20,11 @@ from django.db import models
 from apps.core.enums import FormatType, MatchStatus, ResultType
 from apps.core.models import UUIDPrimaryKeyModel
 
+#: Duplicate-candidate lifecycle (docs/MATCH_DEDUPLICATION.md §3).
+_DUP_STATUSES = ("open", "resolved", "rejected")
+#: Merge ledger lifecycle: 'merged' rows may be split once into 'split'.
+_MERGE_STATUSES = ("merged", "split")
+
 _TOSS_DECISIONS = ("bat", "bowl", "n/a")
 _MARGIN_TYPES = ("runs", "wickets", "innings", "tie", "n/a")
 _AWARD_TYPES = ("player_of_match", "player_of_series", "batter_of_match", "bowler_of_match")
@@ -34,7 +39,16 @@ _OFFICIAL_ROLES = (
 )
 
 
+class MatchManager(models.Manager["Match"]):
+    """Default manager with the merged-away exclusion helper."""
+
+    def exclude_merged(self) -> models.QuerySet[Match]:
+        """Live matches only: rows merged into another are invisible."""
+        return self.filter(merged_into_id__isnull=True)
+
+
 class Match(UUIDPrimaryKeyModel):
+    objects = MatchManager()
     series = models.ForeignKey(
         "competitions.Series",
         null=True,
@@ -119,6 +133,17 @@ class Match(UUIDPrimaryKeyModel):
     #: ``meta.stale`` on read responses (API_SPECIFICATION §3.1/§3.9).
     last_ingested_at = models.DateTimeField(null=True, blank=True)
     revision = models.IntegerField(default=1)
+    #: Set when this row was merged-away into another (Phase I Task 4). A
+    #: merged-away row is excluded from every selector/statistics read and a
+    #: read of its id 301s to the canonical (docs/MATCH_DEDUPLICATION.md).
+    merged_into = models.ForeignKey(
+        "matches.Match",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_index=False,
+    )
 
     class Meta:
         db_table = "match"
@@ -143,7 +168,28 @@ class Match(UUIDPrimaryKeyModel):
             models.Index(fields=["series_id"], name="ix_match_series"),
             models.Index(fields=["venue_id"], name="ix_match_venue"),
             models.Index(fields=["source_local_date"], name="ix_match_local_date"),
+            models.Index(
+                fields=["merged_into_id"],
+                condition=models.Q(merged_into_id__isnull=False),
+                name="ix_match_merged_into",
+            ),
         ]
+
+    def resolve_canonical(self) -> Match:
+        """Follow the merge redirect chain to this row's canonical match.
+
+        A corrupt redirect cycle is refused rather than looped.
+        """
+        from apps.core.errors import Conflict
+
+        seen: set[object] = set()
+        current = self
+        while current.merged_into_id is not None:
+            if current.pk in seen:
+                raise Conflict("Match merge redirect chain contains a cycle")
+            seen.add(current.pk)
+            current = Match.objects.get(pk=current.merged_into_id)
+        return current
 
     def __str__(self) -> str:
         return f"{self.format_type} {self.source_local_date} {self.id}"
@@ -416,3 +462,93 @@ class MatchAward(UUIDPrimaryKeyModel):
 
     def __str__(self) -> str:
         return f"{self.award_type}: {self.player_id}"
+
+
+class MatchDuplicateCandidate(UUIDPrimaryKeyModel):
+    """A scored (candidate, plausible-canonical) match pair for steward review.
+
+    Phase I Task 4 (docs/MATCH_DEDUPLICATION.md §3): the review band
+    [MATCH_DEDUP_REVIEW_THRESHOLD, MATCH_DEDUP_AUTO_THRESHOLD). Never
+    auto-merged — a steward confirms (-> reversible ``match_merge``) or
+    rejects (status='rejected').
+    """
+
+    candidate_match = models.ForeignKey(
+        "matches.Match",
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_index=False,
+    )
+    canonical_match = models.ForeignKey(
+        "matches.Match",
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_index=False,
+    )
+    score = models.DecimalField(max_digits=4, decimal_places=3)
+    breakdown = models.JSONField(null=True, blank=True)
+    status = models.TextField(default="open")
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "match_duplicate_candidate"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["candidate_match_id", "canonical_match_id"],
+                name="ux_match_dup_candidate",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=_DUP_STATUSES),
+                name="ck_match_dup_status_valid",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["canonical_match_id", "status"], name="ix_match_dup_canonical"),
+        ]
+
+    def __str__(self) -> str:
+        return f"dup {self.candidate_match_id} ~ {self.canonical_match_id} {self.score}"
+
+
+class MatchMerge(UUIDPrimaryKeyModel):
+    """Reversible merge ledger (docs/MATCH_DEDUPLICATION.md §4).
+
+    ``before``/``after`` hold the exact child-row inventory (per table: id +
+    prior match_id) so ``split_match`` restores the prior state exactly.
+    Append-only: the only mutation is status 'merged' -> 'split'.
+    """
+
+    merged_match = models.OneToOneField(
+        "matches.Match",
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    canonical_match = models.ForeignKey(
+        "matches.Match",
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_index=False,
+    )
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
+    status = models.TextField(default="merged")
+    created_by = models.UUIDField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    split_by = models.UUIDField(null=True, blank=True)
+    split_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "match_merge"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=_MERGE_STATUSES),
+                name="ck_match_merge_status_valid",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["canonical_match_id"], name="ix_match_merge_canonical"),
+        ]
+
+    def __str__(self) -> str:
+        return f"merge {self.merged_match_id} -> {self.canonical_match_id} ({self.status})"

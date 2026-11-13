@@ -23,7 +23,7 @@ from django.http import HttpRequest
 from django.shortcuts import redirect, render
 
 from apps.core import events as core_events
-from apps.matches.models import Match
+from apps.matches.models import Match, MatchDuplicateCandidate, MatchMerge
 from apps.matches.services import state as lifecycle
 
 CORRECTION_TEMPLATE = "admin/matches/correction_confirm.html"
@@ -146,7 +146,7 @@ class MatchAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("id", "status", "state_title", "start_time_utc", "format_type")
     list_filter = ("status", "format_type")
     search_fields = ("provider_match_id",)
-    readonly_fields = ("id", "ingested_at", "last_ingested_at", "revision")
+    readonly_fields = ("id", "ingested_at", "last_ingested_at", "revision", "merged_into")
     actions = (reopen_for_correction, request_manual_correction)
 
     def has_add_permission(self, request: HttpRequest) -> bool:
@@ -156,4 +156,54 @@ class MatchAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         return False
 
 
-__all__ = ["MatchAdmin", "reopen_for_correction", "request_manual_correction"]
+@admin.register(MatchDuplicateCandidate)
+class MatchDuplicateCandidateAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    """Steward review queue for plausible match duplicates (Phase I Task 4).
+
+    Review actions (``confirm_match_merge`` / ``reject_candidate``) are wired
+    in Task 4 commit 4c alongside the merge service they call; until then the
+    queue is browsable and read-only here.
+    """
+
+    list_display = ("id", "candidate_match", "canonical_match", "score", "status", "created_at")
+    list_filter = ("status",)
+    readonly_fields = ("id", "created_at")
+    search_fields = ("candidate_match_id", "canonical_match_id")
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:
+        return False
+
+
+@admin.register(MatchMerge)
+class MatchMergeAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    """Reversible merge ledger (Phase I Task 4). ``split_match`` action lands
+    with the merge service in commit 4c."""
+
+    list_display = (
+        "id",
+        "merged_match",
+        "canonical_match",
+        "status",
+        "created_at",
+        "split_at",
+    )
+    list_filter = ("status",)
+    readonly_fields = ("id", "before", "after", "created_at", "split_at")
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:
+        return False
+
+
+__all__ = [
+    "MatchAdmin",
+    "MatchDuplicateCandidateAdmin",
+    "MatchMergeAdmin",
+    "reopen_for_correction",
+    "request_manual_correction",
+]

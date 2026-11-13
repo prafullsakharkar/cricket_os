@@ -50,6 +50,8 @@ sync_checkpoint
 data_correction
 match_event_log
 reconciliation_job
+match_duplicate_candidate
+match_merge
 player_career_stat
 team_stat
 head_to_head
