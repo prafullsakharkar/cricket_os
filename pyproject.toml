@@ -31,6 +31,10 @@ dev = [
   "mutmut==3.8.1",
   "schemathesis>=4.32.7",
   "jsonschema>=4.26.0",
+  # uvicorn's websocket implementation for the live proxy-ladder WS hop
+  # (Task 7 §11.1 manual evidence); without it uvicorn serves WS upgrades as
+  # plain HTTP and the WS transport cannot run outside the ASGI test harness.
+  "websockets>=15.0",
 ]
 
 [tool.uv]
