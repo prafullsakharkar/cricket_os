@@ -136,6 +136,33 @@ class CursorPagination(BasePagination):
             }
         )
 
+    def get_paginated_response_schema(self, schema: Any) -> dict[str, Any]:
+        """Declare the ``{"data", "meta"}`` envelope for drf-spectacular.
+
+        Without this override drf-spectacular falls back to its default
+        ``{count, next, previous, results}`` envelope (or a bare array for
+        views that swap pagination classes dynamically), which does not match
+        the response this class emits — a contract drift the Phase I DAST scan
+        surfaced (schemathesis ST108 "response violates schema" on every list
+        endpoint). ``schema`` is the item array type built by drf-spectacular.
+        """
+        return {
+            "type": "object",
+            "required": ["data", "meta"],
+            "properties": {
+                "data": schema,
+                "meta": {
+                    "type": "object",
+                    "required": ["limit", "has_more"],
+                    "properties": {
+                        "limit": {"type": "integer", "example": 25},
+                        "has_more": {"type": "boolean", "example": False},
+                        "next_cursor": {"type": "string", "nullable": True},
+                    },
+                },
+            },
+        }
+
 
 class PageNumberPagination(DrfPageNumberPagination):
     """Offset pagination with ``page`` / ``page_size`` and a total count."""
@@ -157,3 +184,28 @@ class PageNumberPagination(DrfPageNumberPagination):
                 },
             }
         )
+
+    def get_paginated_response_schema(self, schema: Any) -> dict[str, Any]:
+        """Declare the ``{"data", "meta"}`` envelope for drf-spectacular.
+
+        Same rationale as :meth:`CursorPagination.get_paginated_response_schema`
+        — the default DRF envelope does not match this class's response.
+        """
+        return {
+            "type": "object",
+            "required": ["data", "meta"],
+            "properties": {
+                "data": schema,
+                "meta": {
+                    "type": "object",
+                    "required": ["page", "page_size", "total_count", "total_pages", "has_more"],
+                    "properties": {
+                        "page": {"type": "integer", "example": 1},
+                        "page_size": {"type": "integer", "example": 25},
+                        "total_count": {"type": "integer", "example": 0},
+                        "total_pages": {"type": "integer", "example": 0},
+                        "has_more": {"type": "boolean", "example": False},
+                    },
+                },
+            },
+        }

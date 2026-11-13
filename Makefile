@@ -5,7 +5,7 @@ MANAGE := $(UV) run python manage.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-phasef test-phaseh test-phasei test-identity test-nocov test-loadtest-smoke lint fmt typecheck imports check shell
+.PHONY: help up down logs migrate makemigrations run worker test test-scoring test-phasec test-phasef test-phaseh test-phasei test-identity test-nocov test-loadtest-smoke test-secrets test-security lint fmt typecheck imports check shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -80,6 +80,18 @@ test-nocov: ## Run tests without the coverage gate (fast inner loop)
 test-loadtest-smoke: ## Phase E load smoke: cached-read p95 <= 200ms, fan-out <= 1s
 	DJANGO_SETTINGS_MODULE=config.settings.test $(UV) run python loadtests/smoke_gate.py
 
+test-secrets: ## Task 8: fail on any real-credential pattern in the tree (.env excluded)
+	$(UV) run python scripts/security/scan_secrets.py
+
+test-security: ## Task 8: security gates — secret scan + DAST refusal/dry-run + the
+	## security-behaviour suites (metrics gating, push HMAC, realtime origin/caps,
+	## throttling) wired into one target.
+	$(UV) run python scripts/security/scan_secrets.py
+	$(UV) run pytest tests/phase_i/test_security.py tests/api/test_schema_contract.py \
+		tests/phase_d/test_observability.py tests/phase_d/test_ingestion_framework.py \
+		tests/phase_e/test_realtime_transport.py tests/phase_e/test_realtime_websocket.py \
+		tests/phase_e/test_throttling.py -o addopts=""
+
 lint: ## Lint + format check (ruff)
 	$(UV) run ruff check .
 	$(UV) run ruff format --check .
@@ -94,7 +106,7 @@ typecheck: ## Static type check (mypy)
 imports: ## Enforce import boundaries (import-linter)
 	$(UV) run lint-imports
 
-check: lint typecheck imports test test-scoring test-identity test-phasec test-phasef test-phaseh test-phasei ## Everything CI enforces
+check: lint typecheck imports test-secrets test test-scoring test-identity test-phasec test-phasef test-phaseh test-phasei ## Everything CI enforces
 
 shell: ## Django shell
 	$(MANAGE) shell

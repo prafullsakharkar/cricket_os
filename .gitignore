@@ -33,3 +33,6 @@ data/
 
 # Superpowers SDD scratch workspace (never committed)
 .superpowers/
+
+# Schemathesis fuzzer cache (Task 8 DAST evidence lives in reports/security/)
+.schemathesis/
