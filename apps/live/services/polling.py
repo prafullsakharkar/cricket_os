@@ -166,8 +166,14 @@ def poll_live_match(
 
 
 def live_matches() -> list[Match]:
-    """Matches a dispatcher should poll right now (oldest first)."""
-    return list(Match.objects.filter(status__in=LIVE_STATUSES).order_by("last_ingested_at"))
+    """Matches a dispatcher should poll right now (oldest first).
+
+    Merged-away matches are never polled: their data lives under the canonical
+    (docs/MATCH_DEDUPLICATION.md §4).
+    """
+    return list(
+        Match.objects.exclude_merged().filter(status__in=LIVE_STATUSES).order_by("last_ingested_at")
+    )
 
 
 def dispatch_polls(

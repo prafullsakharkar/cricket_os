@@ -21,8 +21,11 @@ from django import forms
 from django.contrib import admin, messages
 from django.http import HttpRequest
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
 
 from apps.core import events as core_events
+from apps.core.errors import Conflict
 from apps.matches.models import Match, MatchDuplicateCandidate, MatchMerge
 from apps.matches.services import state as lifecycle
 
@@ -141,6 +144,202 @@ def request_manual_correction(modeladmin: Any, request: HttpRequest, queryset: A
     )
 
 
+# --------------------------------------------------------------------------- #
+# Phase I Task 4: match de-duplication review actions (reversible)
+# --------------------------------------------------------------------------- #
+
+DEDUP_TEMPLATE = "admin/matches/dedup_review_confirm.html"
+
+
+def _admin_actor(user: Any) -> str:
+    """Audit actor for an admin request: user uuid if present, else label."""
+    uuid_value = getattr(user, "uuid", None)
+    if uuid_value is not None:
+        return str(uuid_value)
+    return str(user)
+
+
+def _dup_rows(queryset: Any) -> list[dict[str, Any]]:
+    rows = []
+    for candidate in queryset.select_related("candidate_match", "canonical_match"):
+        rows.append(
+            {
+                "candidate": candidate.candidate_match,
+                "canonical": candidate.canonical_match,
+                "detail": f"score {candidate.score}",
+            }
+        )
+    return rows
+
+
+def _merge_rows(queryset: Any) -> list[dict[str, Any]]:
+    rows = []
+    for merge in queryset.select_related("merged_match", "canonical_match"):
+        rows.append(
+            {
+                "candidate": merge.merged_match,
+                "canonical": merge.canonical_match,
+                "detail": merge.status,
+            }
+        )
+    return rows
+
+
+def _dedup_confirm(
+    request: HttpRequest,
+    queryset: Any,
+    *,
+    action: str,
+    title: str,
+    description: str,
+    rows: list[dict[str, Any]],
+    cancel_url: str,
+) -> Any:
+    """Render the shared confirmation page for the de-dup actions."""
+    return render(
+        request,
+        DEDUP_TEMPLATE,
+        {
+            "title": title,
+            "description": description,
+            "queryset": queryset,
+            "action": action,
+            "rows": rows,
+            "cancel": reverse(cancel_url),
+        },
+    )
+
+
+@admin.action(
+    permissions=("change",),
+    description="Confirm merge into canonical match (reversible)",
+)
+def confirm_match_merge(modeladmin: Any, request: HttpRequest, queryset: Any) -> Any:
+    """Steward-confirmed merge: candidate -> canonical (reversible), audited."""
+    from apps.matches.services.merge import merge_matches
+
+    if "confirm" in request.POST:
+        actor = _admin_actor(request.user)
+        merged = 0
+        for candidate in queryset.filter(status="open").select_related(
+            "candidate_match", "canonical_match"
+        ):
+            merge_matches(
+                candidate.candidate_match,
+                candidate.canonical_match,
+                actor=actor,
+                reason="steward review",
+            )
+            candidate.status = "resolved"
+            candidate.resolved_at = timezone.now()
+            candidate.save(update_fields=["status", "resolved_at"])
+            core_events.publish(
+                core_events.TOPIC_MATCH_DUP_REVIEWED,
+                {
+                    "duplicate_candidate_id": str(candidate.pk),
+                    "candidate_match_id": str(candidate.candidate_match_id),
+                    "canonical_match_id": str(candidate.canonical_match_id),
+                    "decision": "merged",
+                    "actor": actor,
+                },
+                on_commit=False,
+            )
+            merged += 1
+        modeladmin.message_user(
+            request, f"Merged {merged} candidate(s) (reversible).", messages.SUCCESS
+        )
+        return None
+    return _dedup_confirm(
+        request,
+        queryset,
+        action="confirm_match_merge",
+        title="Confirm match merges",
+        description=(
+            "merge each candidate match into its canonical match (reversible, "
+            "audited); the merged rows stay recoverable via match_merge"
+        ),
+        rows=_dup_rows(queryset),
+        cancel_url="admin:matches_matchduplicatecandidate_changelist",
+    )
+
+
+@admin.action(
+    permissions=("change",),
+    description="Reject selected duplicate candidates",
+)
+def reject_match_candidate(modeladmin: Any, request: HttpRequest, queryset: Any) -> Any:
+    """Reject a duplicate flag: status='rejected' + audited decision."""
+    if "confirm" in request.POST:
+        actor = _admin_actor(request.user)
+        now = timezone.now()
+        rejected = 0
+        for candidate in queryset.filter(status="open"):
+            candidate.status = "rejected"
+            candidate.resolved_at = now
+            candidate.save(update_fields=["status", "resolved_at"])
+            core_events.publish(
+                core_events.TOPIC_MATCH_DUP_REVIEWED,
+                {
+                    "duplicate_candidate_id": str(candidate.pk),
+                    "candidate_match_id": str(candidate.candidate_match_id),
+                    "canonical_match_id": str(candidate.canonical_match_id),
+                    "decision": "rejected",
+                    "actor": actor,
+                },
+                on_commit=False,
+            )
+            rejected += 1
+        modeladmin.message_user(request, f"Rejected {rejected} candidate(s).", messages.SUCCESS)
+        return None
+    return _dedup_confirm(
+        request,
+        queryset,
+        action="reject_match_candidate",
+        title="Reject duplicate candidates",
+        description="mark the selected candidates as resolved (not duplicates)",
+        rows=_dup_rows(queryset),
+        cancel_url="admin:matches_matchduplicatecandidate_changelist",
+    )
+
+
+@admin.action(
+    permissions=("change",),
+    description="Split selected merges (reverse)",
+)
+def split_match(modeladmin: Any, request: HttpRequest, queryset: Any) -> Any:
+    """Reverse a merge exactly: only status='merged' rows split (audited)."""
+    from apps.matches.services.merge import split_match as split_service
+
+    if "confirm" in request.POST:
+        actor = _admin_actor(request.user)
+        split = 0
+        errors = 0
+        for merge_row in queryset.filter(status="merged"):
+            try:
+                split_service(merge_row, actor=actor)
+                split += 1
+            except Conflict:
+                errors += 1
+        modeladmin.message_user(
+            request,
+            f"Split {split} merge(s).{f' {errors} skipped (not merged).' if errors else ''}",
+            messages.SUCCESS,
+        )
+        return None
+    return _dedup_confirm(
+        request,
+        queryset,
+        action="split_match",
+        title="Split match merges",
+        description=(
+            "reverse each selected merge exactly (restores the child rows and "
+            "the merged match); only 'merged' rows split"
+        ),
+        rows=_merge_rows(queryset),
+        cancel_url="admin:matches_matchmerge_changelist",
+    )
+
+
 @admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("id", "status", "state_title", "start_time_utc", "format_type")
@@ -160,15 +359,16 @@ class MatchAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 class MatchDuplicateCandidateAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Steward review queue for plausible match duplicates (Phase I Task 4).
 
-    Review actions (``confirm_match_merge`` / ``reject_candidate``) are wired
-    in Task 4 commit 4c alongside the merge service they call; until then the
-    queue is browsable and read-only here.
+    ``confirm_match_merge`` performs the reversible merge via
+    ``apps.matches.services.merge``; ``reject_match_candidate`` closes the
+    pair. Both are idempotent and audited (``match.dup.reviewed``).
     """
 
     list_display = ("id", "candidate_match", "canonical_match", "score", "status", "created_at")
     list_filter = ("status",)
     readonly_fields = ("id", "created_at")
     search_fields = ("candidate_match_id", "canonical_match_id")
+    actions = (confirm_match_merge, reject_match_candidate)
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         return False
@@ -179,8 +379,8 @@ class MatchDuplicateCandidateAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 
 @admin.register(MatchMerge)
 class MatchMergeAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
-    """Reversible merge ledger (Phase I Task 4). ``split_match`` action lands
-    with the merge service in commit 4c."""
+    """Reversible merge ledger (Phase I Task 4). ``split_match`` reverses a
+    merge exactly (only ``status='merged'`` rows split; audited)."""
 
     list_display = (
         "id",
@@ -192,6 +392,7 @@ class MatchMergeAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     )
     list_filter = ("status",)
     readonly_fields = ("id", "before", "after", "created_at", "split_at")
+    actions = (split_match,)
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         return False
@@ -204,6 +405,9 @@ __all__ = [
     "MatchAdmin",
     "MatchDuplicateCandidateAdmin",
     "MatchMergeAdmin",
+    "confirm_match_merge",
+    "reject_match_candidate",
     "reopen_for_correction",
     "request_manual_correction",
+    "split_match",
 ]

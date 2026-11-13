@@ -85,6 +85,18 @@ def get_match(pk: str) -> Match:
         raise NotFound(f"Match {pk} not found") from exc
 
 
+def resolve_match_redirect(pk: str) -> str | None:
+    """The canonical match id when ``pk`` is a merged-away match, else None.
+
+    A read of a merged match's id answers ``301`` to the canonical
+    (docs/MATCH_DEDUPLICATION.md §4, mirroring player merge).
+    """
+    match = Match.objects.only("pk", "merged_into_id").filter(pk=pk).first()
+    if match is None or match.merged_into_id is None:
+        return None
+    return str(match.resolve_canonical().pk)
+
+
 @contextmanager
 def consistent_snapshot() -> Iterator[None]:
     """Read the payload and ``MAX(seq)`` in one consistent snapshot.
@@ -584,8 +596,12 @@ def _match_filters(
     series_id: Any = None,
     team_id: Any = None,
 ) -> Any:
-    """Shared ``?format=&gender=&series=&team=`` filtering (all optional)."""
-    qs = Match.objects.select_related("venue")
+    """Shared ``?format=&gender=&series=&team=`` filtering (all optional).
+
+    Merged-away matches are invisible at the selector boundary
+    (docs/MATCH_DEDUPLICATION.md §4).
+    """
+    qs = Match.objects.exclude_merged().select_related("venue")
     if format_type:
         qs = qs.filter(format_type=format_type)
     if gender:
@@ -889,6 +905,7 @@ __all__ = [
     "match_shell",
     "match_squads",
     "match_summaries",
+    "resolve_match_redirect",
     "series_squads",
     "series_venues",
 ]
