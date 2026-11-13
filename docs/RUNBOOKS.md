@@ -605,3 +605,60 @@ provider and the staging environment (`docs/STAGING_ACCESS.md`); thresholds in
 reproduces the report deterministically (same findings). A clean replay corpus
 yields zero findings and no new `stage="shadow_compare"` DLQ rows;
 `shadow_mismatches_total` flatlines.
+
+## Backup & restore (replica loss)
+
+**Symptoms.** A replica (if configured) is down; `db_replica_*` metrics stop
+advancing. Reads must continue on the primary — the read path never depends on
+a replica.
+
+**Detection.**
+
+- `docker compose ps` — the `db-replica` service is not `Up`.
+- Replication lag / replica-health alerts (when a replica exists).
+
+**Recovery.**
+
+1. Confirm the primary still answers reads: a `SELECT 1` and a cached-read
+   probe (reads never fail on replica loss — the primary owns the read path).
+2. Restore/rebuild the replica: `pg_basebackup` from the primary (or re-run
+   the replica bootstrap), wire `primary_conninfo`, let streaming catch up.
+3. Verify lag returns to ~0 before routing reads back.
+
+**Status (Phase I).** The local stack has **no `db-replica` service** and the
+local Postgres has no streaming-replication config (`wal_level`/`max_wal_senders`),
+so the game-day replica-loss scenario records `UNVERIFIED` with exactly those
+missing pieces (plan §9.4). Standing up a replica is a pre-launch infra task
+(see the roadmap / `docs/OPERATIONS.md`).
+
+## Credential rotation
+
+**Symptoms.** Upstream auth failures (`401`) on a provider whose breaker opens;
+`CircuitBreakerOpen` for the provider's endpoint.
+
+**Detection.**
+
+- `circuit_breaker_state{provider,endpoint} == 2` for the provider.
+- The credential was rotated upstream but the stored value is stale.
+
+**Recovery.**
+
+1. **Rotation never needs a redeploy.** Secrets resolve at call time
+   (`apps/live/services/credentials.py`): update the secret-manager value (or
+   the `SECRET_<REF>` env var) and the next call picks it up.
+2. Verify the new credential: `credential_headers` now carries the fresh
+   value; the breaker records a success and closes.
+3. If the secret is missing entirely, `CredentialNotFoundError` fails loudly
+   (a provider marked active without a credential never sends silently) —
+   add the secret, then let the breaker recover.
+
+**Status (Phase I).** Verified locally by the game-day
+`scenario_expired_credential` drill: expired token → clean auth header →
+rejections → breaker OPEN → rotate store value (no redeploy) → fresh token →
+CLOSED.
+
+## Operator guide
+
+The day-to-day operator guide (DLQ triage, identity queue, match-merge queue,
+corrections, wrong-score process, and expected queue volumes) lives in
+[`docs/OPERATIONS.md`](OPERATIONS.md).

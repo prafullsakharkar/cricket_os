@@ -68,6 +68,12 @@ reads the same variables.
 | `make imports` | import-linter boundaries |
 | `make check` | Everything CI enforces (lint, types, imports, tests, coverage) |
 
+Operators: see the [operator guide](docs/OPERATIONS.md) (DLQ triage, identity
+and match-merge queues, corrections, wrong-score process) and the
+[runbooks](docs/RUNBOOKS.md). Game-day drills live in
+[`scripts/game_day/`](scripts/game_day/) with evidence under
+`reports/game_day/`.
+
 ## What exists in Phase A
 
 - `apps/core/` — `uuid7`, `time`, `logging`, `middleware`, `errors`,
