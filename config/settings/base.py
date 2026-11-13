@@ -131,6 +131,16 @@ SHADOW_COMPARISON_PROVIDER = env("SHADOW_COMPARISON_PROVIDER")
 SHADOW_REPORT_DIR = env("SHADOW_REPORT_DIR")
 
 # --------------------------------------------------------------------------- #
+# Phase I — load/chaos/DAST target allow-list (gate G3, plan Task 5 §9.1)
+# --------------------------------------------------------------------------- #
+# Comma-separated ``host:port`` entries the load-testing harnesses may target.
+# EMPTY BY DEFAULT: every harness refuses every target until an operator
+# explicitly lists one (loadtests/safety.py). ``--dry-run`` never needs an
+# entry. docs/STAGING_ACCESS.md is the only document allowed to name a real
+# environment's target.
+TARGET_ALLOWLIST = env("TARGET_ALLOWLIST", default="")
+
+# --------------------------------------------------------------------------- #
 # Phase H — fantasy flags (docs/FANTASY.md documents each one)
 # --------------------------------------------------------------------------- #
 # Public fantasy read endpoints (FANTASY_PUBLIC_API_ENABLED). OFF by default:
