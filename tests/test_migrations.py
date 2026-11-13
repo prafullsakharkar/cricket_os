@@ -31,7 +31,7 @@ LEAVES = [
     ("teams", "0001_initial"),
     ("players", "0002_initial"),
     ("competitions", "0002_seed_format_catalogue"),
-    ("providers", "0002_seed_cricsheet_provider"),
+    ("providers", "0003_seed_replay_provider"),
     ("administration", "0002_seed_groups"),
 ]
 
@@ -113,31 +113,35 @@ def test_full_cycle_unapply_reapply_is_symmetric() -> None:
 
 
 @pytest.mark.parametrize(
-    ("app", "seed_migration", "model_label", "seed_count"),
+    ("app", "seed_migration", "model_label", "leaf_count", "forward_count"),
     [
-        ("venues", "0002_seed_countries_governing_bodies", "venues.Country", 11),
-        ("venues", "0002_seed_countries_governing_bodies", "venues.GoverningBody", 13),
-        ("competitions", "0002_seed_format_catalogue", "competitions.FormatCatalogue", 9),
-        ("providers", "0002_seed_cricsheet_provider", "providers.DataProvider", 1),
-        ("administration", "0002_seed_groups", "auth.Group", 4),
+        ("venues", "0002_seed_countries_governing_bodies", "venues.Country", 11, 11),
+        ("venues", "0002_seed_countries_governing_bodies", "venues.GoverningBody", 13, 13),
+        ("competitions", "0002_seed_format_catalogue", "competitions.FormatCatalogue", 9, 9),
+        # providers leaf is now 0003 (cricsheet + replay) -> leaf_count 2; the
+        # 0002 forward step alone restores only cricsheet -> forward_count 1.
+        ("providers", "0002_seed_cricsheet_provider", "providers.DataProvider", 2, 1),
+        ("providers", "0003_seed_replay_provider", "providers.DataProvider", 2, 2),
+        ("administration", "0002_seed_groups", "auth.Group", 4, 4),
     ],
 )
 def test_seed_migration_backward_removes_rows_and_forward_restores_them(
-    app: str, seed_migration: str, model_label: str, seed_count: int
+    app: str, seed_migration: str, model_label: str, leaf_count: int, forward_count: int
 ) -> None:
     app_label, model_name = model_label.split(".")
     model = django_apps.get_model(app_label, model_name)
 
-    # Leaf state: seeded.
-    assert model.objects.count() == seed_count
+    # Leaf state: seeded (the leaf may seed more rows than the migration under
+    # test alone, e.g. providers.0003 seeds both cricsheet and replay).
+    assert model.objects.count() == leaf_count
 
     # Backward to 0001_initial: the seed rows are removed.
     _migrate([(app, "0001_initial")])
     assert model.objects.count() == 0
 
-    # Forward to the seed migration again: the rows come back.
+    # Forward to the seed migration again: its rows come back.
     _migrate([(app, seed_migration)])
-    assert model.objects.count() == seed_count
+    assert model.objects.count() == forward_count
 
 
 def test_full_cycle_on_importer_populated_db() -> None:

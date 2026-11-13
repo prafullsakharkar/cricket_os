@@ -1,0 +1,51 @@
+# Recorded live-provider player corpus (Phase I Task 3).
+#
+# A RECORDED SAMPLE of player attributes as a live provider would send them,
+# used to exercise the identity-linking batch (`manage.py link_provider_identities
+# --provider replay`) against the entities already imported from cricsheet.
+#
+# Derivation & honesty:
+# - Derived from the in-repo register fixtures (tests/fixtures/people.csv /
+#   tests/fixtures/names.csv): the identifiers/names mirror those rows.
+# - This is a STAND-IN (UNVERIFIED): a real provider's view carries its own
+#   spelling, DoB and team-id quirks. date_of_birth values are stand-ins —
+#   people.csv carries no DoB — chosen to match the golden test fixtures.
+# - team_names are the names the provider would use; the linking command
+#   resolves them onto platform team ids by normalised name.
+#
+# provider_entity_id values are the replay provider's own ids for these
+# entities (the namespace is namespaced per provider, so they need not match
+# cricsheet's).
+corpus:
+  - entity_type: player
+    provider_entity_id: "live-0001"
+    attributes:
+      full_name: "Virat Kohli"
+      known_as: "Kohli"
+      unique_name: "V Kohli"
+      date_of_birth: "1988-11-05"
+      birth_country: "India"
+      gender: "M"
+      team_names: ["India"]
+
+  - entity_type: player
+    provider_entity_id: "live-0002"
+    attributes:
+      full_name: "Rohit Sharma"
+      known_as: "Rohit"
+      unique_name: "RG Sharma"
+      date_of_birth: "1987-04-30"
+      birth_country: "India"
+      gender: "M"
+      team_names: ["India"]
+
+  - entity_type: player
+    provider_entity_id: "live-0003"
+    attributes:
+      full_name: "Jasprit Bumrah"
+      known_as: "Bumrah"
+      unique_name: "JB"
+      date_of_birth: "1993-12-06"
+      birth_country: "India"
+      gender: "M"
+      team_names: ["India"]

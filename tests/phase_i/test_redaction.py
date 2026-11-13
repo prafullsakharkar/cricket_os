@@ -81,11 +81,10 @@ def test_credential_headers_are_masked_by_redact() -> None:
 def test_credential_headers_resolve_from_env_store() -> None:
     environ = {"SECRET_LIVE_PROVIDER": "tok-123"}
     store = EnvSecretStore(environ=environ)
-    credential = get_credential(_provider(credential_ref="live_provider"), store=store)
+    provider = _provider(code="live-provider-test", credential_ref="live_provider")
+    credential = get_credential(provider, store=store)
     assert credential.value == "tok-123"
-    assert credential_headers(_provider(credential_ref="live_provider"), store=store) == {
-        "Authorization": "Bearer tok-123"
-    }
+    assert credential_headers(provider, store=store) == {"Authorization": "Bearer tok-123"}
 
 
 def test_missing_credential_ref_fails_loudly() -> None:
@@ -111,10 +110,10 @@ def test_replay_adapter_path_carries_no_credentials() -> None:
         get_credential(replay_provider)
 
 
-def _provider(*, credential_ref: str | None) -> object:
+def _provider(*, code: str = "replay", credential_ref: str | None) -> object:
     from apps.providers.models import DataProvider
 
     provider, _ = DataProvider.objects.get_or_create(
-        code="replay", defaults={"name": "Replay", "credential_ref": credential_ref}
+        code=code, defaults={"name": code, "credential_ref": credential_ref}
     )
     return provider

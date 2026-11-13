@@ -22,11 +22,23 @@ pytestmark = pytest.mark.django_db
 
 
 def _finished_t20() -> object:
+    """A completed T20 whose match row is owned by the replay provider.
+
+    Task 3's migration seeds the ``replay`` provider, so the driver's
+    provider-scoped filter (`SHADOW_COMPARISON_PROVIDER=replay`) only
+    considers matches with ``source_provider_id`` = replay.
+    """
     from tests.phase_d.test_live_apply import _finish_t20, make_context
+
+    from apps.providers.models import DataProvider
 
     ctx = make_context()
     _finish_t20(ctx)
-    return ctx["match"]
+    match = ctx["match"]
+    replay, _ = DataProvider.objects.get_or_create(code="replay", defaults={"name": "Replay"})
+    match.source_provider_id = replay.id
+    match.save(update_fields=["source_provider_id"])
+    return match
 
 
 def _report(tmp_path, day: date = date(2026, 11, 13)) -> tuple[object, list[ComparisonReport]]:
