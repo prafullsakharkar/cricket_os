@@ -1,0 +1,37 @@
+{
+  "connections_run_locally": false,
+  "connections_stated_slo": 1000000,
+  "dry_run": false,
+  "env": {
+    "command": "loadtests/harness_realtime_reconnect.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --duration 6 --rate 1",
+    "date_utc": "2026-11-13T11:34:04.186154+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "name": "harness_realtime_reconnect",
+  "slo": {
+    "implication": "reconnect p95 >= 5 s or event latency >= 1 s under churn means the SSE hub/coalescer needs capacity or the CDN edge must absorb reconnects \u2014 re-run on staging at scale.",
+    "measured": {
+      "error_rate": 0.0,
+      "max_ms": 23.304,
+      "p50_ms": 14.547,
+      "p95_ms": 23.304,
+      "p99_ms": 23.304,
+      "requests": 6.0
+    },
+    "name": "realtime reconnect",
+    "status": "demonstrated",
+    "target": "event latency < 1 s p95, reconnect < 5 s p95"
+  },
+  "target": "localhost:8000"
+}

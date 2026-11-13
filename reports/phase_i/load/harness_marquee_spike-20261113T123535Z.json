@@ -1,0 +1,47 @@
+{
+  "cache_hit_ratio": {
+    "measured": null,
+    "note": "origin cache hit ratio is not observable from a client; surrogate-key purge is verified by the cache suite instead",
+    "status": "not-demonstrated"
+  },
+  "dry_run": false,
+  "env": {
+    "command": "loadtests/harness_marquee_spike.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --rate 200 --ramp 5 --hold 5",
+    "date_utc": "2026-11-13T12:35:35.358939+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "name": "harness_marquee_spike",
+  "peak_rps": 200.0,
+  "slo": {
+    "implication": "any 5xx or p95 >= 500 ms on one hot match locally means the cache/CDN tier must absorb the marquee spike \u2014 not the app \u2014 re-verify on staging at the real 50k figure before launch.",
+    "measured": {
+      "error_rate": 0.425911,
+      "max_ms": 95.967,
+      "p50_ms": 42.165,
+      "p95_ms": 46.372,
+      "p99_ms": 51.969,
+      "requests": 1235.0,
+      "server_5xx": 0.0,
+      "throttled_429": 526.0
+    },
+    "name": "marquee spike",
+    "status": "demonstrated",
+    "target": "ramp 0->50k RPS / 60 s on one match: no 5xx, p95 < 500 ms"
+  },
+  "slo_50k_rps": {
+    "run_locally": false,
+    "stated": 50000
+  },
+  "target": "localhost:8000"
+}

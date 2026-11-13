@@ -19,7 +19,6 @@ from unittest import mock
 import django.conf
 import pytest
 from django.test import override_settings
-
 from loadtests.safety import TargetNotAllowed, allow_list, assert_target_allowed
 
 LOCAL = "localhost:8000"
@@ -63,9 +62,8 @@ def test_explicit_production_listing_is_honoured() -> None:
 
 
 def test_error_message_names_the_target_and_the_allow_list() -> None:
-    with override_settings(TARGET_ALLOWLIST=LOCAL):
-        with pytest.raises(TargetNotAllowed) as exc_info:
-            assert_target_allowed("nope.example:9999")
+    with override_settings(TARGET_ALLOWLIST=LOCAL), pytest.raises(TargetNotAllowed) as exc_info:
+        assert_target_allowed("nope.example:9999")
     message = str(exc_info.value)
     assert "nope.example:9999" in message
     assert "localhost:8000" in message
@@ -78,8 +76,9 @@ def test_env_var_fallback_when_django_is_not_configured() -> None:
     class _Unconfigured:
         configured = False
 
-    with mock.patch.object(django.conf, "settings", _Unconfigured()), mock.patch.dict(
-        "os.environ", {"TARGET_ALLOWLIST": LOCAL}, clear=False
+    with (
+        mock.patch.object(django.conf, "settings", _Unconfigured()),
+        mock.patch.dict("os.environ", {"TARGET_ALLOWLIST": LOCAL}, clear=False),
     ):
         assert allow_list() == {LOCAL}
         assert_target_allowed(LOCAL)

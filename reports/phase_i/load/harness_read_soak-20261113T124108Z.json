@@ -1,0 +1,36 @@
+{
+  "dry_run": false,
+  "env": {
+    "command": "loadtests/harness_read_soak.py --target localhost:8000 --duration 10 --rate 15",
+    "date_utc": "2026-11-13T12:41:08.844636+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "name": "harness_read_soak",
+  "scale_factor_growth_rps": 0.01,
+  "slo": {
+    "implication": "read p95 > 200 ms or error rate >= 0.1% locally means the CDN/replica tiers in the capacity plan are not optional \u2014 re-run on staging before launch.",
+    "measured": {
+      "error_rate": 0.0,
+      "max_ms": 91.421,
+      "p50_ms": 13.17,
+      "p95_ms": 16.566,
+      "p99_ms": 70.296,
+      "requests": 150.0
+    },
+    "name": "read soak",
+    "status": "demonstrated",
+    "target": "p95 < 200 ms cached, error < 0.1% at 1x Growth RPS"
+  },
+  "target": "localhost:8000"
+}

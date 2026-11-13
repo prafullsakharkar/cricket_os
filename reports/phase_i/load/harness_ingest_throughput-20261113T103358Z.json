@@ -1,0 +1,42 @@
+{
+  "dlq_depth_after": 0,
+  "dlq_depth_before": 0,
+  "dlq_growth": 0,
+  "dry_run": false,
+  "env": {
+    "command": "loadtests/harness_ingest_throughput.py --target localhost:55435 --fixtures 5",
+    "date_utc": "2026-11-13T10:33:58.184021+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "fixtures_applied": 5,
+  "lag_estimate_seconds": 0.025,
+  "name": "harness_ingest_throughput",
+  "slo": {
+    "implication": "ingest throughput below 10x peak or DLQ growth locally means the ingestion pipeline needs batching/backpressure tuning before staging; re-run with the real provider corpus on staging.",
+    "measured": {
+      "error_rate": 0.0,
+      "fixtures_created": 5.0,
+      "fixtures_per_sec": 196.603,
+      "max_ms": 25.432,
+      "p50_ms": 15.622,
+      "p95_ms": 25.432,
+      "p99_ms": 25.432,
+      "requests": 5.0
+    },
+    "name": "ingestion throughput",
+    "status": "demonstrated",
+    "target": "10x peak provider rate: no DLQ growth, lag < 30 s"
+  },
+  "target": "localhost:55435"
+}
