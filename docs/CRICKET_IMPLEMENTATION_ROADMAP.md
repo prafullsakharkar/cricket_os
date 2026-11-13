@@ -566,6 +566,54 @@ points tables, H2H, records, form.
   actual figure and deviation).
 - **DoD:** fantasy points computed and auditable; no paid-contest functionality.
 
+## Phase I — Pre-launch validation — **DONE (10 tasks, commits `68298ae`…`e18da66`, branch `phase-i`)**
+
+**Goal:** build the pre-launch validation harness and produce an honest
+go/no-go — **NO-GO** — because the provider gate (`docs/PROVIDER_DECISION.md`)
+and the environment gate (`docs/STAGING_ACCESS.md`) both **fail**.
+
+- **Gates decided first:** G1 provider docs absent ⇒ no vendor adapter, no
+  network, no payload guessing — shadow/comparison against the internal
+  ReplayAdapter; G2 staging docs absent ⇒ local topology only, every staged
+  figure UNVERIFIED with the missing gate named; G3 safety ⇒ every
+  load/chaos/DAST harness refuses non-allow-listed targets (built first).
+- **Tasks (all done):**
+  1. Golden mapping + licensing/redaction readiness evidence.
+  2. Shadow comparison service (dated reports, metrics, alerts, launch
+     criteria hooks).
+  3. Identity linking batch + continuity evidence.
+  4. Match de-dup (a models/DDL, b canonicalise + fixture hooks, c reversible
+     merge/split + selector exclusion + review admin).
+  5. G3 allow-list gate + load harnesses + capacity model (7 reports).
+  6. Game-day scenarios + alert sink + drills (10 drills, 9 sufficient +
+     replica_loss UNVERIFIED).
+  7. Sunset deprecation headers + proxy ladder validation + deprecation policy.
+  8. Secret scan (`make test-secrets` in `check`), DAST-equivalent scan,
+     `SECURITY_REVIEW.md` + `PENTEST_SCOPE.md`, pagination-envelope contract
+     fix.
+  9. Launch plan + go/no-go + feature-flag inventory + risks update + final
+     report (this phase's DONE block).
+- **Evidence:** `reports/phase_i/` (load, shadow, identity, task licensing,
+  consumer ladder), `reports/game_day/` (10 drill reports), `reports/security/`
+  (DAST), `docs/SECURITY_REVIEW.md`, `docs/CAPACITY_MODEL.md`,
+  `docs/OPERATIONS.md`, `docs/API_DEPRECATION_POLICY.md`.
+- **Acceptance (verified):** `make check` green (177 Phase I tests + secret
+  scan; 315 files typechecked); `make test-phasei` 96.12% ≥ 95% on the
+  shadow-mode modules; `make test-security` 112 tests; game-day + load +
+  ladder drills pass locally with honest UNVERIFIED records where the gates
+  fail; **NO-GO verdict documented** in `docs/GO_NO_GO.md`.
+- **Key decisions:** see `.superpowers/sdd/2026-11-11-phase-i-pre-launch/`
+  (D-I1…D-I15): gates fail ⇒ replay-only; MEASURED/ASSUMED/UNVERIFIED tagging;
+  marquee 50k RPS and 1M-connection figures stated, never run locally; soak
+  deploy/failover/replica-loss drills UNVERIFIED with named pieces; proxy
+  `Host` passthrough (`$http_host`); pagination-envelope schema fix; secret
+  scan wired into CI.
+- **Risks:** RSK-01/02/03/12 remain open (G1); F-06 admin IP restriction and
+  F-07 WAF open (UNVERIFIED). **Effort:** 30 planned dev-days; see
+  `docs/PHASE_I_PRELAUNCH_REPORT.md` for the actual figure and deviation.
+- **DoD:** pre-launch validation harness delivered; honest NO-GO with every
+  unproven item named; launch plan ready for when the two gates are met.
+
 ---
 
 ## 1. Cross-phase discipline
