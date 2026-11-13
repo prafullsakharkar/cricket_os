@@ -317,6 +317,19 @@ DUPLICATE_CANDIDATE_THRESHOLD = 0.60
 CRICSHEET_KEY_ALLOWLIST = ["key_opta", "key_pulse"]
 
 # --------------------------------------------------------------------------- #
+# Match de-duplication thresholds (MATCH_DEDUPLICATION.md §2/§3) — PROPOSED
+# --------------------------------------------------------------------------- #
+#: Two fixtures whose UTC start times differ by at most this many minutes are
+#: treated as the same match.
+MATCH_DEDUP_START_TOLERANCE_MINUTES = 180
+#: Score at or above which an incoming fixture auto-canonicalises onto an
+#: existing match (no new ``Match`` row; the provider's match id is mapped).
+MATCH_DEDUP_AUTO_THRESHOLD = 0.95
+#: Score at or above which the pair is queued as a steward review candidate
+#: (``match_duplicate_candidate``); never auto-merged below the auto threshold.
+MATCH_DEDUP_REVIEW_THRESHOLD = 0.60
+
+# --------------------------------------------------------------------------- #
 # Cache / Celery
 # --------------------------------------------------------------------------- #
 # One base URL; each logical role gets its own database by default so an
