@@ -77,6 +77,16 @@ def _player_merged(payload: Mapping[str, Any]) -> set[str]:
     return namespaces
 
 
+def _match_merged(payload: Mapping[str, Any]) -> set[str]:
+    """A match merged away into a canonical: drop both match namespaces + feeds."""
+    namespaces = {_LIVE, _UPCOMING, _RECENT}
+    for field in ("canonical_match_id", "merged_match_id"):
+        value = payload.get(field)
+        if value:
+            namespaces.add(_MATCH.format(match_id=value))
+    return namespaces
+
+
 def _reference(kind: str) -> Invalidator:
     def invalidate(payload: Mapping[str, Any]) -> set[str]:
         namespaces = {f"{kind}s"}
@@ -142,6 +152,8 @@ _DEFAULTS: dict[str, Invalidator] = {
     events.TOPIC_MATCH_COMPLETED: _match_completed,
     events.TOPIC_MATCH_REOPENED: _match_completed,
     events.TOPIC_CORRECTION_APPLIED: _match_recent,
+    events.TOPIC_MATCH_MERGED: _match_merged,
+    events.TOPIC_MATCH_SPLIT: _match_merged,
     events.TOPIC_PLAYER_MERGED: _player_merged,
     events.TOPIC_PLAYER_UPDATED: _reference("player"),
     events.TOPIC_TEAM_UPDATED: _reference("team"),

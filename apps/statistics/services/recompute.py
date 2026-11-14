@@ -960,7 +960,8 @@ def sweep_stale_statistics() -> int:
     ``StatisticsWatermarkLagHigh``).
     """
     matches = (
-        Match.objects.filter(status=MatchStatus.COMPLETED)
+        Match.objects.exclude_merged()
+        .filter(status=MatchStatus.COMPLETED)
         .filter(Q(player_stats__isnull=False) | Q(result__isnull=False) | Q(innings__isnull=False))
         .distinct()
         .order_by("start_time_utc", "id")
@@ -990,7 +991,7 @@ def sweep_stale_statistics() -> int:
 def _matches_in_scope(
     scope: str, ids: list[str] | None = None, since: str | None = None
 ) -> list[Match]:
-    qs = Match.objects.filter(status=MatchStatus.COMPLETED)
+    qs = Match.objects.exclude_merged().filter(status=MatchStatus.COMPLETED)
     if scope == "player":
         if not ids:
             raise ValueError("scope 'player' requires --ids")

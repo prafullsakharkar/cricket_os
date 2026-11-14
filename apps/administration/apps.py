@@ -22,7 +22,10 @@ class AdministrationConfig(AppConfig):
             TOPIC_CORRECTION_REQUESTED,
             TOPIC_DUPLICATE_REVIEWED,
             TOPIC_FANTASY_ADJUSTMENT,
+            TOPIC_MATCH_DUP_REVIEWED,
+            TOPIC_MATCH_MERGED,
             TOPIC_MATCH_REOPENED,
+            TOPIC_MATCH_SPLIT,
             TOPIC_PLAYER_MERGED,
             TOPIC_PROVIDER_MAP_VERIFIED,
             subscribe,
@@ -34,4 +37,7 @@ class AdministrationConfig(AppConfig):
         subscribe(TOPIC_MATCH_REOPENED, handlers.on_match_reopened)
         subscribe(TOPIC_CORRECTION_REQUESTED, handlers.on_correction_requested)
         subscribe(TOPIC_FANTASY_ADJUSTMENT, handlers.on_fantasy_adjustment)
+        subscribe(TOPIC_MATCH_MERGED, handlers.on_match_merged)
+        subscribe(TOPIC_MATCH_SPLIT, handlers.on_match_split)
+        subscribe(TOPIC_MATCH_DUP_REVIEWED, handlers.on_match_dup_reviewed)
         self._ready_done = True

@@ -1,0 +1,52 @@
+{
+  "deploy_drill": {
+    "missing_piece": "no running docker-compose 'app' service in this environment (local stack is a directly-run ASGI process); a real deploy restart must be measured on staging",
+    "status": "UNVERIFIED"
+  },
+  "dry_run": false,
+  "duration_seconds": 25.0,
+  "env": {
+    "command": "loadtests/soak.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --duration 25 --rate 10 --rt-rate 1 --ingest-every 8 --deploy-after 12 --failover-after 18",
+    "date_utc": "2026-11-13T11:35:07.830061+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "failover_drill": {
+    "missing_piece": "docker-compose.yml has no 'db-replica' service (pg_basebackup bootstrap + primary_conninfo absent) and the local Postgres is not configured for streaming replication (wal_level/max_wal_senders); the failover attempt cannot run here and is not faked",
+    "status": "UNVERIFIED"
+  },
+  "ingest_ticks": 3,
+  "name": "soak",
+  "plan_target_duration_seconds": 7200,
+  "slo": {
+    "implication": "a soak run that holds the read/realtime SLOs across a deploy and a failover is the strongest local evidence; the full multi-hour soak on staging is the launch gate",
+    "measured": {
+      "error_rate": 0.0,
+      "max_ms": 87.578,
+      "p50_ms": 13.928,
+      "p95_ms": 16.694,
+      "p99_ms": 20.714,
+      "requests": 342.0,
+      "rt_error_rate": 0.0,
+      "rt_max_ms": 16.534,
+      "rt_p50_ms": 12.469,
+      "rt_p95_ms": 13.812,
+      "rt_p99_ms": 15.728,
+      "rt_requests": 171.0
+    },
+    "name": "soak (read + realtime + ingest)",
+    "status": "not-demonstrated",
+    "target": "read p95 < 200 ms, err < 0.1%; realtime < 1 s p95 over the full duration"
+  },
+  "target": "localhost:8000"
+}

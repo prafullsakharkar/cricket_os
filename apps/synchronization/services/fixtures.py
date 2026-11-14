@@ -109,6 +109,13 @@ class FixtureSyncReport:
 
     provider_code: str
     created: int = 0
+    #: An incoming fixture was canonicalised onto an existing match (no new
+    #: ``Match`` row; a ``provider_entity_map(entity_type='match')`` row maps
+    #: the provider's fixture id onto it) — Phase I Task 4 (4b).
+    canonicalised: int = 0
+    #: An incoming fixture created a stub that was queued as a steward-review
+    #: duplicate candidate (``match_duplicate_candidate``) — Phase I Task 4.
+    candidates: int = 0
     updated: int = 0
     rescheduled: int = 0
     cancelled: int = 0
@@ -167,39 +174,124 @@ def _upsert_teams(match: Match, record: FixtureRecord, provider: Any) -> None:
         MatchTeam.objects.get_or_create(match=match, team=team, defaults={"team_number": number})
 
 
+def _resolve_existing_team_ids(record: FixtureRecord) -> frozenset[object]:
+    """The existing teams matching the fixture's team names (by normalised name).
+
+    Phase I Task 4 (4b): the canonicalise hook compares the *team pair* between
+    an incoming fixture and existing matches, so the fixture's team names must
+    resolve onto existing ``Team`` rows. Resolution requires every name to map
+    to exactly one existing team — an unresolved or ambiguous name returns an
+    empty set (the caller then treats the fixture as new).
+    """
+    from apps.teams.models import Team
+
+    norm = {normalize_name(name) for name in record.teams}
+    candidates = Team.objects.filter(is_active=True, deleted_at__isnull=True)
+    ids: set[object] = set()
+    for team in candidates:
+        if normalize_name(team.name) in norm:
+            ids.add(team.pk)
+    if len(ids) != len(norm):
+        return frozenset()
+    return frozenset(ids)
+
+
+def _new_match_defaults(record: FixtureRecord) -> dict[str, Any]:
+    """The ``defaults`` dict for creating a new ``Match`` from ``record``."""
+    return {
+        "format_type": record.format_type,
+        "gender": record.gender,
+        "start_time_utc": record.start_time_utc,
+        "source_local_date": record.source_local_date,
+        "source_timezone": record.source_timezone,
+        "overs_limit": record.overs_limit,
+        "balls_per_over": record.balls_per_over,
+        "status": record.status
+        if record.status in FIXTURE_IMPOSABLE_STATUSES
+        else MatchStatus.SCHEDULED,
+        "state_title": record.state_title,
+        "status_detail": record.status_detail,
+        "match_number": record.match_number,
+        "match_desc": record.match_desc,
+        "provider_updated_at": timezone.now(),
+        "ingested_at": timezone.now(),
+        "revision": 1,
+    }
+
+
+def _canonicalise_or_none(
+    provider: Any,
+    record: FixtureRecord,
+    team_ids: frozenset[object],
+) -> Any:
+    """Consult the canonicalise service; returns a ``Canonicalisation`` or None.
+
+    None when the fixture's teams do not resolve onto existing rows (nothing to
+    canonicalise against), or when ``find_canonical_match`` reports a miss.
+    """
+    from apps.matches.services.canonicalise import find_canonical_match
+
+    result = find_canonical_match(
+        provider,
+        {
+            "provider_match_id": record.provider_match_id,
+            "team_ids": team_ids,
+            "start_time_utc": record.start_time_utc,
+            "match_number": record.match_number,
+            "match_desc": record.match_desc,
+        },
+    )
+    return result if result.decision != "miss" else None
+
+
 def _sync_one(
     provider: Any,
     record: FixtureRecord,
     *,
     source: Any = None,
 ) -> tuple[str, FixtureSyncReport]:
-    """Upsert one fixture; returns ``(match_id, delta report)``."""
-    match, created = Match.objects.get_or_create(
+    """Upsert one fixture; returns ``(match_id, delta report)``.
+
+    Phase I Task 4 (4b): a genuinely new fixture is first checked against the
+    canonicalise service — if the same fixture already exists under another
+    provider it is mapped onto that canonical match (no new ``Match`` row), or
+    queued as a steward-review duplicate candidate instead of being silently
+    duplicated.
+    """
+    existing = Match.objects.filter(
         source_provider_id=provider.pk,
         provider_match_id=record.provider_match_id,
-        defaults={
-            "format_type": record.format_type,
-            "gender": record.gender,
-            "start_time_utc": record.start_time_utc,
-            "source_local_date": record.source_local_date,
-            "source_timezone": record.source_timezone,
-            "overs_limit": record.overs_limit,
-            "balls_per_over": record.balls_per_over,
-            "status": record.status
-            if record.status in FIXTURE_IMPOSABLE_STATUSES
-            else MatchStatus.SCHEDULED,
-            "state_title": record.state_title,
-            "status_detail": record.status_detail,
-            "match_number": record.match_number,
-            "match_desc": record.match_desc,
-            "provider_updated_at": timezone.now(),
-            "ingested_at": timezone.now(),
-            "revision": 1,
-        },
-    )
-    if created:
-        _upsert_teams(match, record, provider)
-        return str(match.id), FixtureSyncReport(provider_code=provider.code, created=1)
+    ).first()
+    if existing is None:
+        canonical = _canonicalise_or_none(provider, record, _resolve_existing_team_ids(record))
+        if canonical is not None and canonical.decision == "canonical":
+            return (
+                str(canonical.canonical_match.id),
+                FixtureSyncReport(provider_code=provider.code, canonicalised=1),
+            )
+        match, created = Match.objects.get_or_create(
+            source_provider_id=provider.pk,
+            provider_match_id=record.provider_match_id,
+            defaults=_new_match_defaults(record),
+        )
+        if created:
+            _upsert_teams(match, record, provider)
+            if canonical is not None and canonical.decision == "candidate":
+                from apps.matches.services.canonicalise import flag_duplicate_candidate
+
+                flag_duplicate_candidate(
+                    match,
+                    canonical.canonical_match,
+                    score=canonical.score,
+                    breakdown=canonical.breakdown,
+                )
+                return str(match.id), FixtureSyncReport(
+                    provider_code=provider.code, created=1, candidates=1
+                )
+            return str(match.id), FixtureSyncReport(provider_code=provider.code, created=1)
+    else:
+        match = existing
+        created = False
 
     event_log.lock_match(match.id)
     match.refresh_from_db()
@@ -274,6 +366,8 @@ def sync_fixtures(
         total = replace(
             total,
             created=total.created + delta.created,
+            canonicalised=total.canonicalised + delta.canonicalised,
+            candidates=total.candidates + delta.candidates,
             updated=total.updated + delta.updated,
             rescheduled=total.rescheduled + delta.rescheduled,
             cancelled=total.cancelled + delta.cancelled,

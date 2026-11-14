@@ -549,3 +549,116 @@ a ruleset difference, a partial-data run, or an unsupported rule — not a bug.
 
 **Verification.** `fantasy_verify match --ids <match_id>` exits 0 and the
 adjusted total equals computed + net adjustment.
+
+## Shadow mode
+
+**Symptoms.** The shadow comparison pass (Phase I Task 2) flags a mismatch
+between the platform's derived card, the provider's card, and the second
+source (raw-delivery derivation) — `ShadowMismatchRateHigh`, or a pass-level
+alert (`ShadowUnresolvedIdentityHigh`, `ShadowCorrectionLagHigh`,
+`ShadowSchemaDrift`, `ShadowCoverageGapsHigh`). Shadow comparisons are
+**flag-and-queue, never auto-correct**: a finding is a `ShadowComparisonMismatch`
+`IngestionError` DLQ row + a dated report under `reports/shadow/<YYYY-MM-DD>.md`.
+
+**Detection.** `run_shadow_pass` (beat task `shadow.compare_all` /
+`manage.py shadow_report`) runs only when `PROVIDER_SHADOW_MODE=true` (default
+off). The dated report lists findings per category with ours/provider/second
+values; metrics `shadow_mismatches_total{category,severity}` and
+`shadow_comparisons_total{category}` carry the rate.
+
+**Impact.** While the provider gate is unmet
+(`docs/PROVIDER_DECISION.md`), the shadow provider is the **ReplayAdapter** and
+a clean pass should produce **zero** findings — a finding here means the
+read models drifted from the raw-delivery derivation (a real data-quality bug,
+usually in the rebuild path). Every number is **UNVERIFIED** against a licensed
+provider and the staging environment (`docs/STAGING_ACCESS.md`); thresholds in
+`ops/alerts/shadow_alerts.yml` are PROPOSED (`docs/LAUNCH_CRITERIA.md`).
+
+**Recovery.**
+
+1. **Read the report.** `reports/shadow/<YYYY-MM-DD>.md` groups findings by
+   category. A `totals`/`wickets`/`extras`/`result` (severity `critical`)
+   finding means a displayed score would be wrong — investigate immediately.
+   A `batting`/`bowling` (severity `diff`) finding is a line-level drift.
+2. **Find the drift source.** Rebuild the affected match's read models
+   (`rebuild_match`, the same path `result_service.finalise` uses) and
+   re-run the pass. If the finding disappears, the read models were stale; if
+   it persists, the raw-delivery derivation or the read-model build disagrees
+   with the engine conventions — compare against the golden mapping fixture
+   (`tests/contracts/test_golden_mapping.py`).
+3. **Adjudicate DLQ rows.** `ShadowComparisonMismatch` rows under
+   `stage="shadow_compare"` carry the category/field and ours/provider/second
+   values. Resolve per the [DLQ triage](#dlq-triage) flow — never edit match
+   rows from the queue.
+4. **Identity backlog.** `ShadowUnresolvedIdentityHigh` — run
+   `manage.py link_provider_identities --provider replay --dry-run` and review
+   candidates; see [Identity conflict](#identity-conflict).
+5. **Schema drift.** `ShadowSchemaDrift` — the adapter served a
+   malformed/unknown-enum payload; quarantine rows are under
+   `stage__in=("validation","contract","adapter")`. Re-drive via the [Schema
+   drift](#schema-drift) flow.
+6. **Coverage gaps.** `ShadowCoverageGapsHigh` — completed matches the shadow
+   provider omitted or lists late; compare against the second source's window
+   and re-ingest what is missing.
+
+**Verification.** Re-running `manage.py shadow_report` on the same day
+reproduces the report deterministically (same findings). A clean replay corpus
+yields zero findings and no new `stage="shadow_compare"` DLQ rows;
+`shadow_mismatches_total` flatlines.
+
+## Backup & restore (replica loss)
+
+**Symptoms.** A replica (if configured) is down; `db_replica_*` metrics stop
+advancing. Reads must continue on the primary — the read path never depends on
+a replica.
+
+**Detection.**
+
+- `docker compose ps` — the `db-replica` service is not `Up`.
+- Replication lag / replica-health alerts (when a replica exists).
+
+**Recovery.**
+
+1. Confirm the primary still answers reads: a `SELECT 1` and a cached-read
+   probe (reads never fail on replica loss — the primary owns the read path).
+2. Restore/rebuild the replica: `pg_basebackup` from the primary (or re-run
+   the replica bootstrap), wire `primary_conninfo`, let streaming catch up.
+3. Verify lag returns to ~0 before routing reads back.
+
+**Status (Phase I).** The local stack has **no `db-replica` service** and the
+local Postgres has no streaming-replication config (`wal_level`/`max_wal_senders`),
+so the game-day replica-loss scenario records `UNVERIFIED` with exactly those
+missing pieces (plan §9.4). Standing up a replica is a pre-launch infra task
+(see the roadmap / `docs/OPERATIONS.md`).
+
+## Credential rotation
+
+**Symptoms.** Upstream auth failures (`401`) on a provider whose breaker opens;
+`CircuitBreakerOpen` for the provider's endpoint.
+
+**Detection.**
+
+- `circuit_breaker_state{provider,endpoint} == 2` for the provider.
+- The credential was rotated upstream but the stored value is stale.
+
+**Recovery.**
+
+1. **Rotation never needs a redeploy.** Secrets resolve at call time
+   (`apps/live/services/credentials.py`): update the secret-manager value (or
+   the `SECRET_<REF>` env var) and the next call picks it up.
+2. Verify the new credential: `credential_headers` now carries the fresh
+   value; the breaker records a success and closes.
+3. If the secret is missing entirely, `CredentialNotFoundError` fails loudly
+   (a provider marked active without a credential never sends silently) —
+   add the secret, then let the breaker recover.
+
+**Status (Phase I).** Verified locally by the game-day
+`scenario_expired_credential` drill: expired token → clean auth header →
+rejections → breaker OPEN → rotate store value (no redeploy) → fresh token →
+CLOSED.
+
+## Operator guide
+
+The day-to-day operator guide (DLQ triage, identity queue, match-merge queue,
+corrections, wrong-score process, and expected queue volumes) lives in
+[`docs/OPERATIONS.md`](OPERATIONS.md).

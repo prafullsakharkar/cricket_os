@@ -24,6 +24,23 @@ for Cricket OS. Items are traced from earlier documents where relevant.
 | RSK-13 | Secrets leakage via provider payloads/logs | Low | High | Secret manager; redaction; never store secrets in DB/DLQ |
 | RSK-14 | Migrations cause downtime on large tables | Medium | Medium | Expand/contract; `CONCURRENTLY`; migration tests at scale; backup gate |
 | RSK-15 | Scope creep into out-of-scope features (news, betting, paid fantasy) | Medium | Medium | Explicit out-of-scope list enforced in backlog review |
+| RSK-16 | Match-merge mistakes merge two distinct matches | Low | High | Reversible merge/split + audit + selector exclusion; 301 redirect map; reviewed by steward (Phase I Task 4c evidence) |
+| RSK-17 | Proxy-induced SSE/WS breakage (buffering, gzip, upgrade drops) | Low | Medium | `ops/proxy/nginx.conf` (never buffer/compress SSE, upgrade passthrough, `Host` passthrough) + consumer-ladder validation (Task 7) |
+| RSK-18 | False confidence from local-only measurements | High | Medium | MEASURED/ASSUMED/UNVERIFIED tagging discipline; every staged figure names the missing gate (Phase I §Gates) |
+
+### Risk re-rating with Phase I evidence (2026-11-13)
+
+| # | Phase I re-rating | Evidence |
+|---|---|---|
+| RSK-01 | **open, unchanged** (gate G1 fails) — mitigation now exists: the adapter boundary is contract-tested and the shadow/comparison tooling is built and exercised against the ReplayAdapter | `docs/PROVIDER_DECISION.md` (absent = gate), `reports/shadow/*`, Task 1–2 |
+| RSK-02 | **re-rated**: shadow coverage-gap measurement machinery exists and the local corpus shows low gap rates; the *real* provider coverage remains UNVERIFIED (G1) | `reports/phase_i/identity_coverage.md`, `shadow_coverage_gaps_total` |
+| RSK-03 | **unchanged** (G1) — the licensing-policy *mechanism* is verified (config-driven `LICENSED_CONTENT_POLICIES`, `403 license_required` degradation, redaction logging) | Task 1 licensing evidence, `reports/phase_i/task1_licensing_evidence.md` |
+| RSK-05 | **re-rated**: schema-drift detection + quarantine + clean re-drive demonstrated locally (boundary rejection, redacted DLQ row, no faked recovery) | `reports/game_day/scenario_schema_drift-20261113T145049Z.md` |
+| RSK-06 | **re-rated**: breaker/cache-fallback/`stale` behaviour demonstrated locally (outage drill: 3 polls to open, stale skip, probe closes) | `reports/game_day/scenario_provider_outage-20261113T145020Z.md` |
+| RSK-08 | **re-rated**: identity linking batch + continuity evidence on real local data; real provider ID stability remains UNVERIFIED (G1) | `reports/phase_i/task3_identity_evidence.md` |
+| RSK-12 | **unchanged** (G1) — rankings remain provider-gated | `GO_NO_GO.md` §2 |
+| RSK-13 | **re-rated**: `make test-secrets` fails CI on real-credential patterns; redaction verified; credential rotation drill passes | `scripts/security/scan_secrets.py`, `reports/game_day/scenario_expired_credential-20261113T161035Z.md` |
+| RSK-14 | **re-rated**: reversible migrations verified (failed-migration drill: broken migration halts deploy, scratch DB dropped, dev intact) | `reports/game_day/scenario_failed_migration-20261113T160347Z.md` |
 
 ---
 
@@ -61,6 +78,18 @@ for Cricket OS. Items are traced from earlier documents where relevant.
    Laws.)*
 7. The domain model covers all formats in scope (Test, ODI, T20I, domestic
    T20/first-class, women's) via `format_catalogue`. *(Design claim.)*
+
+**Assumptions → observed facts (Phase I, 2026-11-13):**
+
+- The **adapter boundary is contract-tested**: the ReplayAdapter is exercised
+  against the same contract kit the licensed adapter must pass; the shadow
+  comparison pass runs against it deterministically (Task 1–2).
+- The **identity-link threshold is exercised on real data**: the linking batch
+  ran on the local corpus with the DoB-mismatch cap and idempotence verified
+  (Task 3, `reports/phase_i/task3_identity_evidence.md`).
+- The **corrections path is exercised via replay**: correction → version bump
+  (ETag change) → cache purge is demonstrated (Task 6 wrong-score drill,
+  `reports/game_day/scenario_wrong_score-20261113T154955Z.md`).
 
 ---
 

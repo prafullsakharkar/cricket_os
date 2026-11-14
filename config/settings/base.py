@@ -60,6 +60,11 @@ env = environ.Env(
     FANTASY_PROVISIONAL_INTERVAL_SECONDS=(int, 60),
     FANTASY_DEFAULT_AUTO_RECOMPUTE=(bool, True),
     FANTASY_ENGINE_VERSION=(str, "1.0.0"),
+    # Phase I shadow-mode flags (docs/SHADOW_MODE.md). OFF by default: the
+    # shadow pass only runs when explicitly enabled.
+    PROVIDER_SHADOW_MODE=(bool, False),
+    SHADOW_COMPARISON_PROVIDER=(str, "replay"),
+    SHADOW_REPORT_DIR=(str, "reports/shadow"),
     DJANGO_ENVIRONMENT=(str, "dev"),
 )
 
@@ -110,6 +115,30 @@ LIVE_PUSH_REPLAY_WINDOW_SECONDS = env("LIVE_PUSH_REPLAY_WINDOW_SECONDS")
 # Deployment environment name ("dev"/"test"/"prod"). The ReplayAdapter is
 # hard-gated to non-prod (see apps.providers.adapters.replay).
 ENVIRONMENT = env("DJANGO_ENVIRONMENT")
+
+# --------------------------------------------------------------------------- #
+# Phase I — shadow mode (docs/SHADOW_MODE.md)
+# --------------------------------------------------------------------------- #
+# Master switch for the shadow comparison pass (beat task + shadow_report
+# command). OFF by default. While the provider gate (docs/PROVIDER_DECISION.md)
+# is unmet, the shadow provider is the ReplayAdapter and every measured value
+# is UNVERIFIED against a licensed provider.
+PROVIDER_SHADOW_MODE = env("PROVIDER_SHADOW_MODE")
+# Which provider code the shadow pass compares against (the replay adapter
+# until the provider gate is met).
+SHADOW_COMPARISON_PROVIDER = env("SHADOW_COMPARISON_PROVIDER")
+# Where dated shadow reports are written (overridable in tests).
+SHADOW_REPORT_DIR = env("SHADOW_REPORT_DIR")
+
+# --------------------------------------------------------------------------- #
+# Phase I — load/chaos/DAST target allow-list (gate G3, plan Task 5 §9.1)
+# --------------------------------------------------------------------------- #
+# Comma-separated ``host:port`` entries the load-testing harnesses may target.
+# EMPTY BY DEFAULT: every harness refuses every target until an operator
+# explicitly lists one (loadtests/safety.py). ``--dry-run`` never needs an
+# entry. docs/STAGING_ACCESS.md is the only document allowed to name a real
+# environment's target.
+TARGET_ALLOWLIST = env("TARGET_ALLOWLIST", default="")
 
 # --------------------------------------------------------------------------- #
 # Phase H — fantasy flags (docs/FANTASY.md documents each one)
@@ -212,6 +241,7 @@ LOCAL_APPS = [
     "apps.live",
     "apps.realtime",
     "apps.fantasy",
+    "apps.shadow",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -240,6 +270,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Appends Sunset/Link deprecation headers; 410 for fully-sunset endpoints.
+    "apps.core.deprecation.DeprecationMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -295,6 +327,19 @@ DUPLICATE_CANDIDATE_THRESHOLD = 0.60
 #: platform records alongside the Cricsheet identifier. key_cricbuzz /
 #: key_cricinfo are excluded by default pending the Phase 0 licensing review.
 CRICSHEET_KEY_ALLOWLIST = ["key_opta", "key_pulse"]
+
+# --------------------------------------------------------------------------- #
+# Match de-duplication thresholds (MATCH_DEDUPLICATION.md §2/§3) — PROPOSED
+# --------------------------------------------------------------------------- #
+#: Two fixtures whose UTC start times differ by at most this many minutes are
+#: treated as the same match.
+MATCH_DEDUP_START_TOLERANCE_MINUTES = 180
+#: Score at or above which an incoming fixture auto-canonicalises onto an
+#: existing match (no new ``Match`` row; the provider's match id is mapped).
+MATCH_DEDUP_AUTO_THRESHOLD = 0.95
+#: Score at or above which the pair is queued as a steward review candidate
+#: (``match_duplicate_candidate``); never auto-merged below the auto threshold.
+MATCH_DEDUP_REVIEW_THRESHOLD = 0.60
 
 # --------------------------------------------------------------------------- #
 # Cache / Celery

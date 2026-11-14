@@ -1,0 +1,41 @@
+{
+  "burst": 8,
+  "dry_run": false,
+  "env": {
+    "command": "loadtests/harness_correction_burst.py --target localhost:55435 --workers 4 --burst 8",
+    "date_utc": "2026-11-13T10:56:47.244407+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "lock_contention_errors": [],
+  "name": "harness_correction_burst",
+  "slo": {
+    "implication": "lock-contention errors during simultaneous corrections means the advisory-lock strategy needs review (deadlock window) \u2014 re-run on staging with the real correction volume.",
+    "measured": {
+      "error_rate": 0.0,
+      "lock_contention_errors": 0.0,
+      "max_ms": 745.452,
+      "p50_ms": 603.967,
+      "p95_ms": 745.452,
+      "p99_ms": 745.452,
+      "requests": 8.0,
+      "tier1_rebuild_ok": 1.0
+    },
+    "name": "correction burst",
+    "status": "demonstrated",
+    "target": "simultaneous corrections: no lock contention errors"
+  },
+  "target": "localhost:55435",
+  "tier1_rebuild_ok": true,
+  "workers": 4
+}

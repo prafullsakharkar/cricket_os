@@ -279,6 +279,8 @@ def test_sync_fixtures_task_runs_with_adapter() -> None:
         {
             "provider": "replay",
             "created": 1,
+            "canonicalised": 0,
+            "candidates": 0,
             "updated": 0,
             "rescheduled": 0,
             "cancelled": 0,

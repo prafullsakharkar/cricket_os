@@ -8,6 +8,8 @@ full design lives in the [planning package](docs/README.md).
 
 - Conventions for the database: [docs/DB_CONVENTIONS.md](docs/DB_CONVENTIONS.md)
 - How we change the schema safely: [docs/MIGRATION_WORKFLOW.md](docs/MIGRATION_WORKFLOW.md)
+- Pre-launch shadow comparison mode (Phase I): [docs/SHADOW_MODE.md](docs/SHADOW_MODE.md)
+- Pre-launch exit criteria and their owners: [docs/LAUNCH_CRITERIA.md](docs/LAUNCH_CRITERIA.md)
 
 ## Stack
 
@@ -65,6 +67,12 @@ reads the same variables.
 | `make typecheck` | mypy (django-stubs + DRF stubs) |
 | `make imports` | import-linter boundaries |
 | `make check` | Everything CI enforces (lint, types, imports, tests, coverage) |
+
+Operators: see the [operator guide](docs/OPERATIONS.md) (DLQ triage, identity
+and match-merge queues, corrections, wrong-score process) and the
+[runbooks](docs/RUNBOOKS.md). Game-day drills live in
+[`scripts/game_day/`](scripts/game_day/) with evidence under
+`reports/game_day/`.
 
 ## What exists in Phase A
 

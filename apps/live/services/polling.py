@@ -166,8 +166,14 @@ def poll_live_match(
 
 
 def live_matches() -> list[Match]:
-    """Matches a dispatcher should poll right now (oldest first)."""
-    return list(Match.objects.filter(status__in=LIVE_STATUSES).order_by("last_ingested_at"))
+    """Matches a dispatcher should poll right now (oldest first).
+
+    Merged-away matches are never polled: their data lives under the canonical
+    (docs/MATCH_DEDUPLICATION.md §4).
+    """
+    return list(
+        Match.objects.exclude_merged().filter(status__in=LIVE_STATUSES).order_by("last_ingested_at")
+    )
 
 
 def dispatch_polls(
@@ -182,11 +188,13 @@ def dispatch_polls(
 
     ``fetcher_factory(match)`` returns a ``fetcher(match, since_seq)``; when
     an ``adapter`` is given instead, the default factory binds it to the
-    match's ``provider_match_id``.
+    match's provider id — resolved through the provider map so a match that
+    was canonicalised from another provider's fixture is polled under the
+    incoming provider's own fixture id (Phase I Task 4, 4b).
     """
     reports: list[PollReport] = []
     for match in live_matches()[: max_matches if max_matches is not None else None]:
-        factory = fetcher_factory or _adapter_fetcher_factory(adapter)
+        factory = fetcher_factory or _adapter_fetcher_factory(adapter, provider)
         reports.append(
             poll_live_match(
                 match,
@@ -201,13 +209,18 @@ def dispatch_polls(
 
 def _adapter_fetcher_factory(
     adapter: Any,
+    provider: Any = None,
 ) -> Callable[[Match], Callable[[Match, int | None], Iterable[Any]]]:
     """Bind an adapter's ``iter_deliveries`` to each match's provider id."""
     from apps.live.services.apply import LiveInningsBatch
+    from apps.matches.services.canonicalise import provider_match_id_for
+
+    provider_code = getattr(provider, "code", None) or provider
 
     def factory(match: Match) -> Callable[[Match, int | None], Iterable[Any]]:
         def fetcher(match: Match, since_seq: int | None) -> Iterable[Any]:
-            records = adapter.iter_deliveries(match.provider_match_id, since_seq)
+            provider_id = provider_match_id_for(match, provider_code)
+            records = adapter.iter_deliveries(provider_id, since_seq)
             return [r for r in records if isinstance(r, LiveInningsBatch)]
 
         return fetcher

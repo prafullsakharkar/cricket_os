@@ -203,4 +203,31 @@ class TestListItems:
             _validate_payload(item, schema_name, json_schema_doc)
 
 
+class TestPaginatedEnvelope:
+    """Every list response uses the ``{"data": [...], "meta": {...}}`` envelope.
+
+    Phase I Task 8: the DAST scan (schemathesis) surfaced ST108 "response
+    violates schema" on every list endpoint because drf-spectacular fell back
+    to its default ``{count, results}`` envelope (or a bare array for views
+    that swap pagination classes dynamically) while the app emits the custom
+    envelope. The fix is ``get_paginated_response_schema`` on
+    ``apps/core/pagination.py``; this test locks the generated contract.
+    """
+
+    def test_every_paginated_component_declares_data_meta(self, schema_doc: dict[str, Any]) -> None:
+        paginated = {
+            name: comp
+            for name, comp in schema_doc["components"]["schemas"].items()
+            if name.startswith("Paginated")
+        }
+        assert paginated, "no Paginated* components in the schema"
+        for name, comp in paginated.items():
+            assert comp.get("type") == "object", f"{name} must be an object envelope"
+            props = comp.get("properties", {})
+            assert "data" in props, f"{name} must declare a data property"
+            assert props["data"]["type"] == "array", f"{name}.data must be an array"
+            assert "meta" in props, f"{name} must declare a meta property"
+            assert props["meta"]["type"] == "object", f"{name}.meta must be an object"
+
+
 __all__: list[str] = []

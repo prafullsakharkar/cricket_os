@@ -152,6 +152,14 @@ class ReplayAdapter:
         self._retry_budget = self.faults.retry_after
         self._5xx_budget = self.faults.http_5xx
         self._timeout_budget = self.faults.timeout
+        #: Schema-drift events served (malformed/unknown-enum payloads). Read by
+        #: the shadow comparison driver (apps.shadow) for its report.
+        self._schema_drift_events = 0
+
+    @property
+    def schema_drift_events(self) -> int:
+        """Count of malformed/unknown-enum payloads served by this adapter."""
+        return self._schema_drift_events
 
     # -- protocol ---------------------------------------------------------- #
     def capabilities(self) -> ProviderCapabilities:
@@ -206,6 +214,7 @@ class ReplayAdapter:
 
         match = self._resolve_match(provider_match_id)
         if self.faults.unknown_status:
+            self._mark_schema_drift()
             return LiveState(status=self.faults.unknown_status)
         return self._state_for(match)
 
@@ -408,7 +417,12 @@ class ReplayAdapter:
         )
 
     def _malformed(self, draft: Any) -> Any:
+        self._schema_drift_events += 1
         return replace(draft, dismissal_type="NOT_A_DISMISSAL")
+
+    def _mark_schema_drift(self) -> None:
+        """Count an unknown-enum payload (get_state with a faulted status)."""
+        self._schema_drift_events += 1
 
 
 def replay_available() -> bool:

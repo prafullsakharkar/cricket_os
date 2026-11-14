@@ -16,7 +16,10 @@ from apps.core.events import (
     TOPIC_CORRECTION_REQUESTED,
     TOPIC_DUPLICATE_REVIEWED,
     TOPIC_FANTASY_ADJUSTMENT,
+    TOPIC_MATCH_DUP_REVIEWED,
+    TOPIC_MATCH_MERGED,
     TOPIC_MATCH_REOPENED,
+    TOPIC_MATCH_SPLIT,
     TOPIC_PLAYER_MERGED,
     TOPIC_PROVIDER_MAP_VERIFIED,
 )
@@ -105,11 +108,58 @@ def on_fantasy_adjustment(payload: Any) -> None:
     )
 
 
+def on_match_merged(payload: Any) -> None:
+    """Audit a reversible match merge (Phase I Task 4)."""
+    AuditLog.objects.create(
+        action=TOPIC_MATCH_MERGED,
+        entity_type="match",
+        entity_id=payload["canonical_match_id"],
+        after={
+            "merged_match_id": payload["merged_match_id"],
+            "canonical_match_id": payload["canonical_match_id"],
+        },
+        actor_label=str(payload.get("actor")),
+    )
+
+
+def on_match_split(payload: Any) -> None:
+    """Audit a match merge being reversed (split)."""
+    AuditLog.objects.create(
+        action=TOPIC_MATCH_SPLIT,
+        entity_type="match",
+        entity_id=payload["merged_match_id"],
+        after={
+            "merge_id": payload.get("merge_id"),
+            "merged_match_id": payload["merged_match_id"],
+            "canonical_match_id": payload["canonical_match_id"],
+        },
+        actor_label=str(payload.get("actor")),
+    )
+
+
+def on_match_dup_reviewed(payload: Any) -> None:
+    """Audit a match duplicate-candidate review decision (confirm/reject)."""
+    AuditLog.objects.create(
+        action=TOPIC_MATCH_DUP_REVIEWED,
+        entity_type="match_duplicate_candidate",
+        entity_id=payload["duplicate_candidate_id"],
+        after={
+            "candidate_match_id": payload.get("candidate_match_id"),
+            "canonical_match_id": payload.get("canonical_match_id"),
+            "decision": payload.get("decision"),
+        },
+        actor_label=str(payload.get("actor")),
+    )
+
+
 __all__ = [
     "on_correction_requested",
     "on_duplicate_reviewed",
     "on_fantasy_adjustment",
+    "on_match_dup_reviewed",
+    "on_match_merged",
     "on_match_reopened",
+    "on_match_split",
     "on_player_merged",
     "on_provider_map_verified",
 ]

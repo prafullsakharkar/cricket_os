@@ -103,3 +103,77 @@ load smoke gate: PASS
 The burst number is dominated by the 0.2 s coalesce flush (by design — one
 batch per client per tick); the correction number is the pure immediate-flush
 path (ledger #6).
+
+---
+
+## Phase I Task 5 — staged performance-validation harnesses (`loadtests/harness_*.py`, `soak.py`)
+
+These are the §12 load scenarios (`docs/CRICKET_PERFORMANCE_AND_SCALING.md`
+§12) run against the **local production-topology stack** (gate G2 FAILS → no
+staging; every number is `UNVERIFIED`). CI runs **only** the safety tests
+(`tests/phase_i/test_harness_safety.py`); the harnesses are manual/long.
+
+### Gate G3 — the target allow-list (built first)
+
+Every harness refuses to run unless its target is on `TARGET_ALLOWLIST`
+(comma-separated `host:port`), which is **empty by default**:
+
+```bash
+# refuse (default, empty allow-list) — exits 1
+uv run python loadtests/harness_read_soak.py --target localhost:8000
+
+# allow a target for this run
+TARGET_ALLOWLIST=localhost:8000 uv run python loadtests/harness_read_soak.py \
+    --target localhost:8000 --duration 60 --rate 20
+```
+
+`--dry-run` validates inputs and prints the plan **without any request and
+without needing an allow-list entry**:
+
+```bash
+uv run python loadtests/harness_read_soak.py --target localhost:8000 --dry-run
+```
+
+Production-looking hosts are refused unless explicitly listed, and
+`docs/STAGING_ACCESS.md` is the only document allowed to name a real
+environment's target.
+
+### Harnesses
+
+Start the stack first (PostgreSQL + Redis + the ASGI server):
+
+```bash
+make up
+uv run uvicorn config.asgi:application --host 127.0.0.1 --port 8000   # terminal 1
+```
+
+All HTTP harnesses share `--target host:port`, `--duration`, `--rate`,
+`--dry-run`; reports land in `reports/phase_i/load/<name>-<timestamp>.json`
+tagged with env / instances / command / date and the §12 SLO target.
+
+| Harness | Scenario (§12) | Run (allow-listed) | Dry-run |
+|---|---|---|---|
+| `harness_read_soak.py` | read soak @ 1× Growth (local: scaled down) | `uv run python loadtests/harness_read_soak.py --target localhost:8000 --duration 60 --rate 20` | `--target localhost:8000 --dry-run` |
+| `harness_marquee_spike.py` | spike on one match (local: hundreds, not 50k RPS) | `uv run python loadtests/harness_marquee_spike.py --target localhost:8000 --match-id <uuid> --rate 200 --ramp 30 --hold 30` | `--target localhost:8000 --dry-run` |
+| `harness_deliveries_feed.py` | cursor pagination under load | `uv run python loadtests/harness_deliveries_feed.py --target localhost:8000 --match-id <uuid> --innings 1 --rate 2` | `--target localhost:8000 --dry-run` |
+| `harness_realtime_reconnect.py` | SSE connect/reconnect churn | `uv run python loadtests/harness_realtime_reconnect.py --target localhost:8000 --match-id <uuid> --rate 1` | `--target localhost:8000 --dry-run` |
+| `harness_ingest_throughput.py` | replay ingest throughput (in-process, rolled back; target = Postgres) | `TARGET_ALLOWLIST=localhost:55435 uv run python loadtests/harness_ingest_throughput.py --target localhost:55435 --fixtures 100` | `--target localhost:55435 --dry-run` |
+| `harness_correction_burst.py` | simultaneous corrections (in-process, rolled back) | `TARGET_ALLOWLIST=localhost:55435 uv run python loadtests/harness_correction_burst.py --target localhost:55435 --workers 8 --burst 40` | `--target localhost:55435 --dry-run` |
+| `soak.py` | read soak + realtime + ingest ticks; deploy & failover drills | `uv run python loadtests/soak.py --target localhost:8000 --match-id <uuid> --duration 7200 --rate 20` | `--target localhost:8000 --dry-run` |
+
+Notes:
+
+- **`--match-id` is optional for `--dry-run`** (required for real runs). The
+  seeded load-fixture match used for local evidence is
+  `01a1d48f-b1a9-7000-b091-b296048c7f52`.
+- The **deliveries endpoint is throttled at 2/s** (API_SPEC §7), so
+  `harness_deliveries_feed.py` defaults to 2 pages/s; a higher `--rate` trips
+  the throttle itself, which is recorded honestly (429s are not hidden).
+- `soak.py` attempts a **mid-soak deploy restart** and a **replica failover**;
+  in this environment both record `UNVERIFIED` with the exact missing piece
+  (no running compose `app` service; no `db-replica` service / no streaming
+  replication config) — never faked. The plan's local soak target is ≥ 2 h.
+- The two in-process harnesses wrap their work in rolled-back transactions and
+  clean up their seed rows; the dev database is left untouched.
+- Results and the per-SLO model: `docs/CAPACITY_MODEL.md` (all numbers
+  `MEASURED` on the local topology, `UNVERIFIED` against production).

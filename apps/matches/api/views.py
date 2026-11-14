@@ -37,6 +37,7 @@ import json
 import time
 from typing import Any
 
+from django.http import HttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -56,6 +57,7 @@ from apps.matches.selectors.reads import (
     match_scorecard,
     match_shell,
     match_squads,
+    resolve_match_redirect,
 )
 
 _DELIVERY_DEFAULT_LIMIT = 50
@@ -69,6 +71,21 @@ def _ended_at(match: Any) -> float | None:
 
 class _MatchCachedView(CachedReadMixin, APIView):
     """Shared caching identity for all ``/matches/{id}`` sub-resources."""
+
+    def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        """A merged-away match's id answers 301 to the canonical (any sub-path).
+
+        Mirrors the player-merge redirect (docs/MATCH_DEDUPLICATION.md §4);
+        deliberately no cache headers on the redirect.
+        """
+        pk = kwargs.get("pk")
+        canonical_id = resolve_match_redirect(pk) if pk else None
+        if canonical_id is not None:
+            response = HttpResponse(status=301)
+            location = request.path.replace(f"/{pk}/", f"/{canonical_id}/", 1)
+            response["Location"] = location
+            return response
+        return super().dispatch(request, *args, **kwargs)
 
     def cache_parts(self, request: Any, *args: Any, **kwargs: Any) -> tuple[str, ...]:
         return (kwargs["pk"],)

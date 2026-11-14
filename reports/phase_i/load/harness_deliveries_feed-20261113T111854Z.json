@@ -1,0 +1,36 @@
+{
+  "dry_run": false,
+  "env": {
+    "command": "loadtests/harness_deliveries_feed.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --innings 1 --duration 8 --rate 2",
+    "date_utc": "2026-11-13T11:18:54.620745+00:00",
+    "django": "6.1.2",
+    "instances": {
+      "app_nodes": 1,
+      "db": "docker-compose PostgreSQL (single primary; replica attempted in soak)",
+      "redis": 1,
+      "worker": 1
+    },
+    "platform": "Linux-5.14.0-687.53.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "psycopg_driver": "3.3.6",
+    "python": "3.14.6",
+    "topology": "local docker-compose production-topology stack: PostgreSQL 17.x + Redis 7.x + single ASGI process (uvicorn). Smaller than the planning stage; extrapolation to production is an ASSUMED estimate, not a guarantee.",
+    "unverified_reason": "gate G2 FAILS: no staging environment (docs/STAGING_ACCESS.md absent). Local-topology measurement only; NOT production evidence."
+  },
+  "name": "harness_deliveries_feed",
+  "page_size": 50,
+  "slo": {
+    "implication": "deliveries pagination p95 >= 300 ms under load means the cursor query plan needs an index check on the partition key \u2014 re-run on staging with a production-sized deliveries table.",
+    "measured": {
+      "error_rate": 0.0,
+      "max_ms": 131.791,
+      "p50_ms": 46.93,
+      "p95_ms": 60.526,
+      "p99_ms": 131.791,
+      "requests": 32.0
+    },
+    "name": "deliveries feed",
+    "status": "demonstrated",
+    "target": "cursor pagination under spike: p95 < 300 ms"
+  },
+  "target": "localhost:8000"
+}

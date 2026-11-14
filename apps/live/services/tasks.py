@@ -91,6 +91,8 @@ def sync_fixtures_task(provider_id: str | None = None, days: int = 7) -> list[di
             {
                 "provider": provider.code,
                 "created": report.created,
+                "canonicalised": report.canonicalised,
+                "candidates": report.candidates,
                 "updated": report.updated,
                 "rescheduled": report.rescheduled,
                 "cancelled": report.cancelled,
