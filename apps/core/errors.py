@@ -24,6 +24,7 @@ logger = logging.getLogger("apps.core.errors")
 #: Human-readable defaults per catalog code.
 CODE_MESSAGES: dict[str, str] = {
     "invalid_query": "Invalid query parameters",
+    "method_not_allowed": "Method not allowed",
     "unauthenticated": "Authentication required",
     "forbidden": "Forbidden",
     "license_required": "License required",
@@ -42,7 +43,7 @@ _STATUS_TO_CODE: dict[int, str] = {
     401: "unauthenticated",
     403: "forbidden",
     404: "not_found",
-    405: "invalid_query",
+    405: "method_not_allowed",
     406: "invalid_query",
     409: "conflict",
     415: "unprocessable",
@@ -54,6 +55,7 @@ _STATUS_TO_CODE: dict[int, str] = {
 #: Canonical HTTP status per catalog code (used to re-map, e.g. 400 → 422).
 _CODE_STATUS: dict[str, int] = {
     "invalid_query": 400,
+    "method_not_allowed": 405,
     "unauthenticated": 401,
     "forbidden": 403,
     "license_required": 403,
