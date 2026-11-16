@@ -452,7 +452,7 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.FormParser",
     ],
     "EXCEPTION_HANDLER": "apps.core.errors.drf_exception_handler",
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "apps.core.schema.CricketOSSchema",
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.CursorPagination",
     "PAGE_SIZE": 25,
     # DRF reserves `?format=` (URL_FORMAT_OVERRIDE) for renderer selection,
