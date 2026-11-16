@@ -171,6 +171,42 @@ class PageNumberPagination(DrfPageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = MAX_PAGE_SIZE
 
+    def get_page_size(self, request: Request) -> int:
+        """Resolve ``?page_size=`` strictly: integers >= 1 only.
+
+        DRF's default silently falls back to ``page_size`` on a non-positive
+        integer, accepting schema-violating values (floats, empty strings) and
+        hiding typos (F-05, ST201). A non-integer or <1 value is a 400
+        ``invalid_query``, matching the OpenAPI ``minimum: 1`` declared in
+        :meth:`get_schema_operation_parameters`.
+        """
+        raw = request.query_params.get(self.page_size_query_param)
+        if raw is None:
+            return self.page_size
+        try:
+            value = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise InvalidQuery(
+                "page_size must be an integer",
+                details={self.page_size_query_param: raw},
+            ) from exc
+        if value < 1:
+            raise InvalidQuery(
+                "page_size must be >= 1",
+                details={self.page_size_query_param: raw},
+            )
+        if self.max_page_size is not None:
+            return min(value, self.max_page_size)
+        return value
+
+    def get_schema_operation_parameters(self, view: Any) -> list[dict[str, Any]]:
+        """Declare ``page_size`` with ``minimum: 1`` (matches :meth:`get_page_size`)."""
+        params = super().get_schema_operation_parameters(view)
+        for param in params:
+            if param.get("name") == self.page_size_query_param:
+                param.setdefault("schema", {})["minimum"] = 1
+        return params
+
     def get_paginated_response(self, data: Sequence[Any]) -> Response:
         return Response(
             {

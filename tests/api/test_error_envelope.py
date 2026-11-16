@@ -61,3 +61,32 @@ class TestStandardErrorResponsesDeclared:
         schema = responses["400"]["content"]["application/json"]["schema"]
         assert schema["type"] == "object"
         assert "error" in schema["required"]
+
+
+class TestPageSizeStrict:
+    def test_page_size_float_is_400(self, api_client: Any, seed_reference: Any) -> None:
+        response = api_client.get("/api/v1/teams?page_size=3.5")
+        assert response.status_code == 400
+        assert _error(response)["code"] == "invalid_query"
+
+    def test_page_size_empty_string_is_400(self, api_client: Any, seed_reference: Any) -> None:
+        response = api_client.get("/api/v1/teams?page_size=")
+        assert response.status_code == 400
+
+    def test_page_size_zero_is_400(self, api_client: Any, seed_reference: Any) -> None:
+        response = api_client.get("/api/v1/teams?page_size=0")
+        assert response.status_code == 400
+
+    def test_page_size_negative_is_400(self, api_client: Any, seed_reference: Any) -> None:
+        response = api_client.get("/api/v1/teams?page_size=-5")
+        assert response.status_code == 400
+
+    def test_page_size_valid_still_works(self, api_client: Any, seed_reference: Any) -> None:
+        response = api_client.get("/api/v1/teams?page_size=1")
+        assert response.status_code == 200
+        assert response.json()["meta"]["page_size"] == 1
+
+    def test_page_size_above_max_clamps(self, api_client: Any, seed_reference: Any) -> None:
+        response = api_client.get("/api/v1/teams?page_size=9999")
+        assert response.status_code == 200
+        assert response.json()["meta"]["page_size"] == 100

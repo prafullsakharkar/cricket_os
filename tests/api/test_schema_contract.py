@@ -259,4 +259,18 @@ class TestNullableNestedPlayerFields:
             _validate_payload(item, "Player", json_schema_doc)
 
 
+class TestPageSizeSchema:
+    def test_page_size_declares_minimum_one(self, schema_doc: dict[str, Any]) -> None:
+        seen = False
+        for methods in schema_doc["paths"].values():
+            for op in methods.values():
+                if not isinstance(op, dict):
+                    continue
+                for param in op.get("parameters", []):
+                    if param.get("name") == "page_size":
+                        assert param["schema"].get("minimum") == 1
+                        seen = True
+        assert seen, "no page_size parameter in the schema"
+
+
 __all__: list[str] = []
