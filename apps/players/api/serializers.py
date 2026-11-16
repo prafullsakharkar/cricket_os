@@ -39,8 +39,8 @@ PLAYER_FIELDS = (
 
 class PlayerSerializer(SparseFieldsMixin, serializers.ModelSerializer):  # type: ignore[type-arg]
     allowed_fields = PLAYER_FIELDS
-    birth_country = CountryBriefSerializer(read_only=True)
-    international_team = TeamBriefSerializer(read_only=True)
+    birth_country = CountryBriefSerializer(read_only=True, allow_null=True)
+    international_team = TeamBriefSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Player

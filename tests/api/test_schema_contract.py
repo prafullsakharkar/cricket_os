@@ -63,8 +63,14 @@ def _coerce_nullable(node: Any) -> None:
     """
 
     if isinstance(node, dict):
-        if node.get("nullable") and "type" in node:
-            node["type"] = [node["type"], "null"]
+        if node.get("nullable"):
+            if "type" in node:
+                node["type"] = [node["type"], "null"]
+            elif "allOf" in node:
+                # {allOf: [...], nullable: true} -> anyOf: [{allOf: [...]}, null]
+                inner = {"allOf": node["allOf"]}
+                node.clear()
+                node["anyOf"] = [inner, {"type": "null"}]
         node.pop("nullable", None)
         for value in node.values():
             _coerce_nullable(value)
@@ -228,6 +234,29 @@ class TestPaginatedEnvelope:
             assert props["data"]["type"] == "array", f"{name}.data must be an array"
             assert "meta" in props, f"{name} must declare a meta property"
             assert props["meta"]["type"] == "object", f"{name}.meta must be an object"
+
+
+class TestNullableNestedPlayerFields:
+    def test_schema_declares_nested_player_fields_nullable(
+        self, schema_doc: dict[str, Any]
+    ) -> None:
+        player = schema_doc["components"]["schemas"]["Player"]["properties"]
+        assert player["birth_country"].get("nullable") is True
+        assert player["international_team"].get("nullable") is True
+
+    def test_player_without_country_or_team_validates(
+        self,
+        api_client: Any,
+        seed_reference: Any,
+        json_schema_doc: dict[str, Any],
+    ) -> None:
+        from apps.players.models import Player
+
+        Player.objects.create(full_name="Unattached Batter", gender="M")
+        response = api_client.get("/api/v1/players")
+        assert response.status_code == 200
+        for item in response.json()["data"]:
+            _validate_payload(item, "Player", json_schema_doc)
 
 
 __all__: list[str] = []
