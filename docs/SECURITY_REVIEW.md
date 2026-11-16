@@ -1,6 +1,7 @@
 # Security review (Phase I Task 8)
 
-Status: **current** — last updated 2026-11-13 for the Phase I release candidate.
+Status: **current** — last updated 2026-11-16 for the F-02…F-05 follow-up
+(fixes + DAST re-run; see §4).
 
 This document records the Phase I security validation: the CI security gates
 (§12.1), the DAST-equivalent scan of the local topology (§12.2) and the
@@ -37,11 +38,15 @@ live there, gitignored) and binary/serialized artifacts are excluded;
 
 ## 2. Release-candidate verification
 
-`make check` against the final Phase I commit (Task 8 commit) passes end to
-end: lint + format clean, mypy clean (315 source files), import-linter clean,
-and the full test suite green (core + Phase B/C + scoring + identity + phase C
-+ phase F + phase H + **phase I**: 171 tests, 96.12% line+branch ≥ 95% on the
-shadow-mode modules).
+`make check` passes end to end on `develop` (measured 2026-11-16, after the
+F-02…F-05 fixes): lint + format clean, mypy clean (315 source files),
+import-linter clean, secret scan clean, and the full test suite green (core +
+Phase B/C + scoring + identity + phase C + phase F + phase H + **phase I**:
+182 tests, 96.12% line+branch ≥ 95% on the shadow-mode modules — up from 171
+at the Phase I RC). The contract fixes added `tests/api/test_error_envelope.py`
+(12 tests: 405 envelope, standard error responses, strict `page_size`) and
+3 tests to `tests/api/test_schema_contract.py` (nullable nested player fields,
+`page_size` schema `minimum`).
 
 ## 3. Security-behaviour suites (re-verified, §12.3)
 
@@ -71,18 +76,24 @@ is claimed**. The equivalent scanners are real and installed:
 * **authenticated pass** — a real Django admin login (`/admin/`) driven with a
   provisioned local steward account, probing the ops surfaces.
 
-Full run: `reports/security/dast-20261113T201150Z.md` (target
+Full run (pre-fix): `reports/security/dast-20261113T201150Z.md` (target
 `localhost:8000`, uvicorn + Postgres + Redis local stack).
+Full run (post-fix): `reports/security/dast-20261116T163320Z.md` — same target
+and stack; schemathesis failures dropped from 79 to 28 (ST103 30→0, ST204
+38→0, ST201 2→0; residuals re-characterized below).
 
 ### Findings (tracked)
 
 | # | Finding | Severity | Status | Remediation | Owner |
 |---|---|---|---|---|---|
 | F-01 | **Pagination-envelope schema drift**: drf-spectacular declared the DRF default `{count, results}` (or a bare array) while list endpoints emit `{data, meta}` — ST108 on every list endpoint | medium (contract) | **fixed** in this commit | `get_paginated_response_schema` added to `apps/core/pagination.py` (both cursor + page-number); contract locked by `tests/api/test_schema_contract.py::TestPaginatedEnvelope` | API |
-| F-02 | ST103 undocumented status codes (~30): e.g. 404/400/429 on list endpoints not declared in the schema | low | open (tracked) | drf-spectacular response-status completion; document the standard error statuses per endpoint | API |
-| F-03 | ST204 undeclared methods return `400` instead of `405` (TRACE etc. on read-only endpoints) — requests are still rejected | low | open (tracked) | map unknown methods to `405` in the API exception handler (REST contract) | API |
-| F-04 | ST108 residual (1–4): a `Player` list item carries a null nested field the schema declares non-nullable | low | open (tracked) | mark the field `nullable` in the serializer/schema | API |
-| F-05 | ST201/ST202 (2–5): `page_size` as a float/null accepted (lenient coercion); a few schema-valid requests rejected | low | open (tracked) | tighten query-param coercion; align schema | API |
+| F-02 | ST103 undocumented status codes (~30): e.g. 404/400/429 on list endpoints not declared in the schema | low | **fixed** (2026-11-16) | `CricketOSSchema` (`apps/core/schema.py`) appends the standard error responses (400/404/405/429/500, error envelope) to every operation via `setdefault`; locked by `tests/api/test_error_envelope.py::TestStandardErrorResponsesDeclared`. Re-run: ST103 30→**0** | API |
+| F-03 | ST204 undeclared methods return `400` instead of `405` (TRACE etc. on read-only endpoints) — requests are still rejected | low | **fixed** (2026-11-16) | `method_not_allowed` catalog code in `apps/core/errors.py` preserves DRF's 405 (was re-mapped to 400 `invalid_query`); locked by `tests/api/test_error_envelope.py::TestUnsupportedMethodsReturn405` (TRACE/PUT/PATCH/DELETE). Re-run: ST204 38→**0** | API |
+| F-04 | ST108 residual (1–4): a `Player` list item carries a null nested field the schema declares non-nullable | low | **fixed** (2026-11-16) | `birth_country`/`international_team` marked `allow_null=True` in `PlayerSerializer` → schema `nullable: true`; locked by `tests/api/test_schema_contract.py::TestNullableNestedPlayerFields`. The Player list-item violation is gone; same-class residuals on other endpoints are tracked as R-1 | API |
+| F-05 | ST201/ST202 (2–5): `page_size` as a float/null accepted (lenient coercion); a few schema-valid requests rejected | low | **fixed** (2026-11-16) | strict `get_page_size` in `apps/core/pagination.py` (400 `invalid_query` on non-integer / <1) + schema `minimum: 1` via `get_schema_operation_parameters`; locked by `tests/api/test_error_envelope.py::TestPageSizeStrict` and `tests/api/test_schema_contract.py::TestPageSizeSchema`. Re-run: ST201 2→**0**; the 2 residual ST202 are the pre-existing query-param schema drift (R-2) | API |
+| R-1 | ST108 residual (3): `players/{id}/` detail response is `{data: Player}` but the schema declares the bare `Player` (same class as F-01, detail endpoints); `teams` list/detail items carry null `country`/`governing_body`/`home_venue` the `TeamBrief`-style schema declares non-nullable (same class as F-04, Team serializer) | low (contract) | open (tracked) | detail-endpoint envelope schema; `allow_null` on the teams nested fields — same fixes as F-01/F-04 on the remaining endpoints; out of scope for the F-02…F-05 pass | API |
+| R-2 | ST202 residual (2): pre-existing query-param schema drift — endpoints enforce required/bounded params at runtime (`InvalidQuery`) but declare **no** params in the schema: `/head-to-head` requires `team1`+`team2`, `/players/compare` requires 2–4 `player_ids`, `/search` requires `q` ≥ 2 chars. A bare GET is schema-valid but rejected 400 | low (contract) | open (tracked) | declare the params (`required`, `minLength`/`minItems`) to match the app's validation; same class as the pre-existing `ordering`/`search` drift, out of scope for the F-02…F-05 pass | API |
+| R-3 | ST105 residual (23): malformed path params (non-UUID, e.g. `null,null`) match no route and, **in DEBUG mode**, Django's technical 404 page (`text/html`) is served where the schema declares 404→`application/json`. Production serves the JSON envelope (`handler404`); local-topology artifact of the dev settings | low (contract) | open (tracked) | surfaced by F-02's 404 declaration (was part of the old ST103 cluster); verify on a DEBUG-off topology; no code change implied for production | API |
 | F-06 | **Admin path IP restriction — GAP**: no IP-restriction middleware for `/admin` | medium (design gap) | **open** | Proposed control: reverse-proxy allow-list at the edge (deployment platform). Out of scope to build the edge in this phase. **UNVERIFIED for production** | Platform |
 | F-07 | **WAF rules**: none present locally (no real CDN/WAF in the local topology) | medium (design gap) | open / **UNVERIFIED** | Depends on the deployment platform; §9 spike mitigations reference WAF/CDN as design, not evidence | Platform |
 | F-08 | External penetration test | — | **planned, not run** | See `docs/PENTEST_SCOPE.md` | Platform |
@@ -91,8 +102,12 @@ Interpretation of the schemathesis ST codes: all are **schema/runtime contract
 drift** (undocumented status codes, undeclared methods, envelope/type
 mismatches), not exploitable vulnerabilities — every non-conforming request is
 rejected (400/404/429). No auth bypass, injection, access-control violation or
-data exposure was found on the local topology. The one client-visible contract
-bug (the pagination envelope drift, F-01) is **fixed and locked by a test**.
+data exposure was found on the local topology. The client-visible contract
+bugs (pagination envelope F-01, standard error statuses F-02, 405 mapping
+F-03, nullable nested player fields F-04, strict `page_size` F-05) are
+**fixed and locked by tests**; the remaining R-1…R-3 rows are the same classes
+on the remaining endpoints / pre-existing param drift / a DEBUG-mode 404-page
+artifact, all tracked above.
 
 ## 5. Threat-model controls (SECURITY §12) — status
 
