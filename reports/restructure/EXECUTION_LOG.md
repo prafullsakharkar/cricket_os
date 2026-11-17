@@ -89,9 +89,6 @@ Gate: **PASS**.
 `/tmp/opencode/restructure/baseline-files.txt`. Baseline tree = depth-2 listing in
 CRICKET_INVENTORY.md §1.
 
----
-## Stage 0 verdict: **PASS** — baseline recorded; no red items attributable to the restructure.
-
 ### 0.1a docs link check + runbook anchors (baseline)
 ```
 $ python3 /tmp/opencode/restructure/check_docs_links.py .   -> OK: 74 markdown files, all relative links resolve
@@ -102,17 +99,117 @@ CRICKET_BACKEND_ARCHITECTURE, CRICKET_DATABASE_SCHEMA). No local mermaid-cli too
 (only `npx`, which needs network) -> fence balance verified (2/4,1/6,1/4,1/20), render
 check deferred to GitHub's native Mermaid rendering. Baseline = fence-balanced.
 
-### 0.2 makemigrations --check
-<!-- filled below -->
+---
+## Stage 0 verdict: **PASS** — baseline recorded; no red items attributable to the restructure.
 
-### 0.3 migrate forward/backward
-<!-- filled below -->
+---
 
-### 0.4 docs link check + Mermaid
-See 0.1a above (recorded with make check section).
+## Stage 1 — Skeleton (commit `855ca5b`)
 
-### 0.5 schema-ddl + migration-drift workflow steps (local)
-<!-- filled below -->
+Created target directories + a short README per top-level area:
+`backend/README.md`, `infrastructure/README.md`, `clients/README.md`
+(StudioHub README style: one table of contents, run section). No moves.
+A stray `infrastructure/clients/` dir created by the mkdir was removed before commit.
 
-### 0.6 full file list
-<!-- filled below -->
+Gate: dirs + READMEs exist, `make check` untouched (nothing moved). **PASS**.
+Rollback: `git reset --hard 23ad73f` (unused).
+
+## Stage 2 — Rename-only moves (commits `4fa70df` `09cea87` `e1b4f52` `314a98e` `090e802` `765c061`)
+
+All `git mv`, 635 renames, 0 content edits (`git diff 855ca5b..HEAD -M --summary`
+shows only `rename` lines; `git diff -M --stat` shows `| 0` for every moved file).
+
+| Area | Commit | Moves |
+|---|---|---|
+| infrastructure | `4fa70df` | `Dockerfile`→`infrastructure/docker/django/Dockerfile`, `docker-compose.yml`→`infrastructure/compose/compose.yml`, `ops/proxy/nginx.conf`→`infrastructure/docker/nginx/nginx.conf`, `ops/alerts`→`infrastructure/ops/alerts` |
+| loadtests | `09cea87` | `loadtests`→`backend/loadtests` |
+| reference client | `e1b4f52`, `314a98e` | `tools/reference_client`→`clients/reference_client` (flattened) |
+| scripts + ci | `090e802` | `scripts`→`backend/scripts`, `ci`→`backend/scripts/ci` |
+| backend code + packaging | `765c061` | `apps config tests manage.py pyproject.toml uv.lock .python-version .coveragerc-* .env.example`→`backend/` |
+
+`git log --follow` verified on samples per area (Dockerfile → `750c334`,
+local_sink → `3e4d9d9`, compose → `750c334`, smoke_gate → `5a29d3e`, safety →
+`e17a6ad`, realtime_client → `f37e9d5`, extract_ddl → `9d595fb`, manage.py →
+`750c334`, pyproject → `127da59`, core/models → `837eed9`). Untracked
+`__pycache__` dirs from the moves were removed (never committed).
+
+Gate: renames only, history intact, tree broken *only* in expected reference-fix
+ways (stale-path inventory captured and used as the Stage 3 fix list). **PASS**.
+
+## Stage 3 — Reference fixes (commits `1b6c09e` `95b6a95` `1d5ed5f` `eeeb4a2` `983dc06`)
+
+### 3.1 Python path computations + script defaults + tests (`1b6c09e`, 22 files)
+- `infrastructure/ops/alerts/local_sink.py`: `ROOT = parents[2]` → `parents[3]` (repo root).
+- `backend/scripts/security/scan_secrets.py`: `ROOT = parents[2]` → `parents[3]` (repo root).
+- `backend/scripts/security/dast_scan.py`: `ROOT` (sys.path) = `parents[2]` (backend);
+  new `REPO_ROOT = parents[3]` for `REPORT_DIR`.
+- `backend/scripts/consumer_ladder.py`: `REF_CLIENT_DIR = ROOT.parent/"clients"/"reference_client"`;
+  `REPORT_PATH = ROOT.parent/"reports"/"phase_i"/...`.
+- `backend/scripts/game_day/common.py`: `ROOT` (sys.path) = `parents[2]` (backend);
+  `REPORTS_DIR = parents[3]/"reports"/"game_day"` (repo root).
+- `backend/loadtests/harness_common.py`: `REPORTS_DIR = parents[2]/"reports"/"phase_i"/"load"`.
+- `backend/scripts/extract_ddl.py`: default doc path from `__file__` (`parents[2]/docs/...`).
+- `backend/apps/players/management/commands/import_cricsheet_register.py`: `parents[3]`→`parents[4]`.
+- Tests: `test_game_day` (load-by-path `local_sink` via `spec_from_file_location`,
+  `REPO_ROOT` for reports/docs), `test_consumer_ladder` (nginx + report paths),
+  `test_docs` (dual roots), `test_gate_docs` (parents[2]), `test_reference_client`
+  (client path), `phase_d/h/i/test_observability` (alert-YAML + RUNBOOKS paths).
+- Docstring/comment path fixes: `fantasy/metrics.py`, `soak.py`,
+  `scenario_replica_loss.py`, `test_migrations.py` (+phase_c), `test_reference_client`,
+  `phase_f/test_observability`. `cd backend &&` docstring prefixes reverted (E501 churn).
+- Verified: `ruff check .` + `ruff format --check .` clean, `mypy apps config`
+  clean (316 files), import-linter 10 contracts kept, targeted tests 27+43+12 passed,
+  `.coveragerc-phasec` gate 98.85% from `backend/` (no coveragerc change needed).
+
+### 3.2 Makefile (`95b6a95`)
+`PY := cd backend && $(UV) run`, `COMPOSE_ARGS := -f infrastructure/compose/compose.yml`,
+all Python targets run from `backend/`, compose targets use the new file. Target names
+kept. Verified: `make help`, `make lint`, `make imports`, `make migrate`, `make test-secrets`.
+
+### 3.3 Docker + compose (`1d5ed5f`)
+`infrastructure/docker/django/Dockerfile`: `COPY backend/pyproject.toml backend/uv.lock ./`
++ `COPY backend/ ./` (build context stays repo root). Compose `app`/`worker`:
+`build.context: ../..` + `dockerfile: docker/django/Dockerfile`. `docker compose config -q` valid.
+
+### 3.4 GitHub workflows (`eeeb4a2`)
+`ci.yml`: per-job `defaults.run.working-directory: backend` (lint/typecheck/imports/migrations/test),
+upload artifact `backend/coverage.xml`, comment `docker-compose.yml`→`infrastructure/compose/compose.yml`.
+`migration-drift.yml`: job-level `working-directory: backend`, `paths:` → `backend/apps/**`,
+`backend/config/**`, `backend/scripts/ci/**`, `backend/scripts/extract_ddl.py`,
+`backend/pyproject.toml`, `backend/uv.lock`; step paths `ci/*`→`scripts/ci/*`; artifact
+`backend/ref.txt`, `backend/dj.txt`. `schema-ddl.yml`: `working-directory: backend`,
+`paths:` → `backend/scripts/extract_ddl.py`, `backend/scripts/ci/ddl_checks.sql`;
+`psql -f scripts/ci/ddl_checks.sql`; artifact `backend/reference.sql`.
+YAML parse OK (3 files). Local simulation from `backend/`: `python3 scripts/extract_ddl.py`
+(no-arg) → 1157 lines (same as baseline), DDL applies clean, `scripts/ci/ddl_checks.sql`
+→ 59 tables. actionlint not installed (noted).
+
+### 3.5 Active docs path refs (`983dc06`, 21 files)
+Script (`/tmp/opencode/restructure/fix_docs_paths.py`, not committed) rewrote stale
+filesystem paths in 20 active docs + README.md:
+`ops/alerts/*`→`infrastructure/ops/alerts/*`, `ops/proxy/nginx.conf`→
+`infrastructure/docker/nginx/nginx.conf`, `tools/reference_client`→`clients/reference_client`,
+`ci/{schema_*,ddl_checks}`→`backend/scripts/ci/*`, `docker-compose.yml`→
+`infrastructure/compose/compose.yml`, `.coveragerc-*`→`backend/.coveragerc-*`,
+`loadtests/`/`scripts/`→`backend/...`. Command examples made runnable:
+`uv run python loadtests|scripts/...` → `cd backend && uv run python ...`;
+reference client (stdlib-only) → `python clients/reference_client/...` from repo root.
+`docs/superpowers/plans/*.md` excluded (dated archival records — documented exception).
+README.md: `cp backend/.env.example backend/.env`, `cd backend && uv sync`, layout section.
+Verified: docs links OK (78 files), runbook anchors OK (25), Mermaid fences balanced.
+
+### 3.6 Ignore files + env examples (no commit — no changes needed)
+`.gitignore`/`.dockerignore` patterns are location-agnostic (`coverage.xml`, `.venv/`,
+`.env`, `!.env.example` match at any depth): `git check-ignore backend/.env`
+`backend/coverage.xml` `backend/.venv` all ignored; `backend/.env.example` tracked.
+`scan_secrets.py` excludes by name (`name != ".env.example"`) → still scans the example.
+
+Stage 3 gate: targeted gates green during the category commits (ruff/mypy/imports,
+test-secrets, compose config, workflow YAML, docs links). Full `make check` = Stage 5 V1.
+
+## Stage 4 — Root hygiene (commit `19430d1`)
+
+Added `.editorconfig` + `.gitattributes` (generic), `.github/CODEOWNERS` (TODO-marked,
+no invented owners), `docs/REPO_LAYOUT.md` (full map + how-to-add sections), root
+README.md layout section. Docs link check still OK (79 files).
+Gate: files present/valid, links OK. **PASS**.
