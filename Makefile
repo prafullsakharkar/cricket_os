@@ -1,7 +1,9 @@
 SHELL := /bin/bash
 UV ?= uv
 COMPOSE ?= docker compose
-COMPOSE_ARGS := -f infrastructure/compose/compose.yml
+# --project-directory . keeps compose reading the repo-root .env for
+# interpolation (POSTGRES_PORT/REDIS_PORT), as before the restructure.
+COMPOSE_ARGS := --project-directory . -f infrastructure/compose/compose.yml
 # All Python commands run from backend/ (the uv project root), mirroring the
 # CI `working-directory: backend` convention.
 PY := cd backend && $(UV) run
