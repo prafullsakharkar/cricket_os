@@ -1,0 +1,19 @@
+# Normalize line endings; keep text files LF in the repo and on checkout.
+* text=auto
+
+*.py    text eol=lf
+*.js    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.sh    text eol=lf
+*.sql   text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf
+
+# Generated / binary artifacts stay as-is.
+*.lock text eol=lf
+*.png binary
+*.jpg binary
+*.svg text eol=lf

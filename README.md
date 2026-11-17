@@ -76,6 +76,14 @@ and match-merge queues, corrections, wrong-score process) and the
 [`backend/scripts/game_day/`](backend/scripts/game_day/) with evidence under
 `reports/game_day/`.
 
+## Repository layout
+
+All Python code lives under [`backend/`](backend/README.md) (the uv project
+root); Docker/ops assets under [`infrastructure/`](infrastructure/README.md);
+standalone API clients under [`clients/`](clients/README.md). The full map,
+including how to add a new app, script, alert rule or area, is in
+[`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md).
+
 ## What exists in Phase A
 
 - `apps/core/` — `uuid7`, `time`, `logging`, `middleware`, `errors`,

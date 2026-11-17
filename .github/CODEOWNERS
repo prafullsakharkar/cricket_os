@@ -1,0 +1,13 @@
+# CODEOWNERS — ownership map (scaffolded during the StudioHub-style
+# restructure).
+#
+# TODO(restructure): assign real owners per area. No owner facts exist in the
+# repo yet, so nothing below is owned and every PR falls back to the default
+# review flow. Fill these in once owners are known:
+#
+#   /backend/apps/core/         @team-core
+#   /backend/apps/scoring/      @team-scoring
+#   /backend/config/            @team-platform
+#   /docs/                      @docs-maintainers
+#   /infrastructure/            @team-platform
+#   /reports/                   @docs-maintainers
