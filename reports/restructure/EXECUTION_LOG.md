@@ -213,3 +213,80 @@ Added `.editorconfig` + `.gitattributes` (generic), `.github/CODEOWNERS` (TODO-m
 no invented owners), `docs/REPO_LAYOUT.md` (full map + how-to-add sections), root
 README.md layout section. Docs link check still OK (79 files).
 Gate: files present/valid, links OK. **PASS**.
+
+## Stage 5 — Final verification (commits `9cdec36` `bc4b135` `85bee96` `e5f2569`)
+
+Full results in `VERIFICATION_REPORT.md`. Summary:
+
+- **V1 `make check`** — first full run FAILED for an environmental reason (no
+  `backend/.env`, so Django used the default `DATABASE_URL` on port 5432, which
+  another service owns). Re-run with the verification env exported: **exit 0,
+  numbers identical to baseline** (1873/94.84%, 172/99.07%, 40/100%,
+  184/98.85%, 137×2 93.96%/97.07%, 318×2 100%, 182/96.12%).
+- The first env-correct run surfaced **5 residual path bugs** fixed in `bc4b135`:
+  `test_enums` schema-doc (`parents[1]`→`[2]`), `import_cricsheet_register`
+  curated-venues CSV (`parents[4]`→`[3]`), and the three purity/determinism
+  subprocess roots (scoring + fantasy engine) that pointed at the repo root via
+  the `.git` marker instead of `backend/`. After the fix: 44/44 previously
+  failing tests pass; full `make check` green.
+- **V2–V4 migrations** — `makemigrations --check` clean; 58→0→58 round-trip;
+  graph diff empty vs baseline (from `backend/`).
+- **V5 compose** — image build failed first: `dockerfile:` is resolved against
+  the build context, so `docker/django/Dockerfile` → `infrastructure/docker/django/Dockerfile`
+  (`85bee96`). Then the app container failed at start: compose `command:`
+  overrode the Dockerfile `uv run` CMD and `uvicorn` is not on PATH — fixed with
+  `uv run uvicorn/celery` (`85bee96`; latent pre-restructure, containers had
+  never been started). Then `--profile full up` tried to recreate postgres on
+  port 5432 because compose's project dir is now `infrastructure/compose/` and no
+  longer read the root `.env` (`POSTGRES_PORT=55435`); the old container was
+  recreated/removed and restored from the `pgdata` volume with data intact.
+  Fix: Makefile `COMPOSE_ARGS := --project-directory . -f …` (`e5f2569`) so
+  `make up` reads the repo-root `.env` as before. Final: images built, app
+  container starts, `GET /api/v1/health` → 200 `{"status":"ok","database":"ok","redis":"ok"}`.
+- **V6 uvicorn/celery** — host uvicorn from `backend/` → health OK; celery
+  worker → `ready.` on redis.
+- **V7 workflows** — 3 YAMLs parse; schema-ddl steps from `backend/` (extract
+  1157 lines, DDL applies, `scripts/ci/ddl_checks.sql` → 59 tables);
+  migration-drift steps from `backend/` (migrate, makemigrations clean,
+  NO DRIFT across 59 scoped tables).
+- **V9 gates have teeth** — throwaway worktree seeded `apps.core →
+  apps.administration` import → `lint-imports` exit 1; seeded
+  `AKIAIOSFODNN7EXAMPLE` AWS key → `scan_secrets` exit 1 (first seed with a
+  `_SEEDED` suffix did not match the `\b` pattern — reseeded exactly).
+  Worktree removed.
+- **V10–V13** — docs links 79/0 broken, 25 runbook anchors, Mermaid fences
+  balanced; `git log --follow` samples per moved area show pre-restructure
+  history; root-scoped stale-path grep empty; `git status` clean; only
+  `backend/.env.example` tracked; `git log --all -- .env` empty; secret scan clean.
+
+Gate: **PASS** — every item in the verification matrix green vs baseline.
+
+---
+
+## Final commit log (this branch, oldest → newest)
+
+```
+23ad73f chore(restructure): add StudioHub structure analysis and Cricket OS inventory
+9fc5169 chore(restructure): mapping and staged execution plan
+d79ed67 chore(restructure): record Stage 0 baseline (make check, migrations, drift, docs)
+855ca5b chore(restructure): scaffold target directories with per-area READMEs
+4fa70df chore(restructure): move infrastructure files (Dockerfile, compose, nginx, alert rules)
+09cea87 chore(restructure): move loadtests under backend
+e1b4f52 chore(restructure): move reference client under clients
+314a98e chore(restructure): flatten reference_client into clients root
+090e802 chore(restructure): move scripts and ci helpers under backend/scripts
+765c061 chore(restructure): move backend code and packaging under backend/
+1b6c09e chore(restructure): fix Python path computations, script defaults and test path references
+95b6a95 chore(restructure): repoint Makefile targets to backend and compose path
+1d5ed5f chore(restructure): repoint Dockerfile and compose to backend layout
+eeeb4a2 chore(restructure): repoint GitHub workflows to backend layout
+983dc06 chore(restructure): update active docs path references to new layout
+19430d1 chore(restructure): root hygiene (editorconfig, gitattributes, CODEOWNERS todo, repo layout doc)
+9cdec36 chore(restructure): record Stages 1-4 in execution log
+bc4b135 chore(restructure): fix residual path computations (enums doc, importer venues CSV, purity subprocess roots)
+85bee96 chore(restructure): fix compose dockerfile path and container commands (uv run)
+e5f2569 chore(restructure): keep compose reading repo-root .env for port interpolation
+```
+
+Rollback (if ever needed, NOT run): `git reset --hard pre-restructure-2026-11-17`.
+Nothing has been force-pushed or rewritten; the branch is local-only.
