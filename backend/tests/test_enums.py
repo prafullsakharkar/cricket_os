@@ -11,7 +11,7 @@ from apps.core import enums
 
 pytestmark = pytest.mark.unit
 
-SCHEMA_DOC = Path(__file__).resolve().parents[1] / "docs" / "CRICKET_DATABASE_SCHEMA.md"
+SCHEMA_DOC = Path(__file__).resolve().parents[2] / "docs" / "CRICKET_DATABASE_SCHEMA.md"
 
 ENUM_CLASSES = {
     "team_type": enums.TeamType,

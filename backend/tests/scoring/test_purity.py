@@ -9,16 +9,20 @@ from pathlib import Path
 
 
 def _repo_root() -> Path:
-    """Locate the repository root even when mutmut runs a copy under ``mutants/``.
+    """Locate the Python project root even when mutmut runs a copy under ``mutants/``.
 
     ``mutants/`` also carries a ``pyproject.toml`` and a full ``apps`` package, so
     the authoritative marker is the ``.git`` directory; ``apps/scoring/__init__.py``
-    is only a fallback for non-git checkouts.
+    is only a fallback for non-git checkouts. The Python code lives under
+    ``backend/``, so the ``.git`` marker resolves to ``<root>/backend``.
     """
 
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / ".git").exists():
+            backend = parent / "backend"
+            if (backend / "apps" / "scoring" / "__init__.py").exists():
+                return backend
             return parent
     for parent in current.parents:
         if (parent / "apps" / "scoring" / "__init__.py").exists():

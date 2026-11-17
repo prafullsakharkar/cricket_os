@@ -205,9 +205,13 @@ def test_monotonicity_runs_never_decrease_points() -> None:
 
 
 def _repo_root() -> Path:
+    # Python code lives under backend/ (the uv project root).
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / ".git").exists():
+            backend = parent / "backend"
+            if (backend / "apps" / "fantasy" / "engine" / "__init__.py").exists():
+                return backend
             return parent
     raise RuntimeError("could not locate repository root")
 

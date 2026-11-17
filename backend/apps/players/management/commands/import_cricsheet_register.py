@@ -37,7 +37,7 @@ from apps.players.import_register import ImportReport, Kind, RegisterSink, impor
 from apps.players.sinks import DjangoRegisterSink
 
 #: Curated venue seed used when no --venues file is given (module docstring).
-CURATED_VENUES_CSV = Path(__file__).resolve().parents[4] / "venues" / "seed" / "curated_venues.csv"
+CURATED_VENUES_CSV = Path(__file__).resolve().parents[3] / "venues" / "seed" / "curated_venues.csv"
 
 #: Column names the curated venue CSV carries (name,city,country_iso,timezone).
 CURATED_HEADERS = ("name", "city", "country_iso", "timezone")
