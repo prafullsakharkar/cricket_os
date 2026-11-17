@@ -37,7 +37,9 @@ services:
 
   app:
     profiles: ["full"]
-    build: .
+    build:
+      context: ../..
+      dockerfile: docker/django/Dockerfile
     command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
@@ -55,7 +57,9 @@ services:
 
   worker:
     profiles: ["full"]
-    build: .
+    build:
+      context: ../..
+      dockerfile: docker/django/Dockerfile
     command: celery -A config.celery worker -l info
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev

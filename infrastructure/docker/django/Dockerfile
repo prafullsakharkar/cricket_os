@@ -17,9 +17,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # Dependency layer (cached): lockfile is committed.
-COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-COPY . .
+# Application source (backend/ is the Django project root).
+COPY backend/ ./
 
 CMD ["uv", "run", "uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
