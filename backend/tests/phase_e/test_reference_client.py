@@ -1,7 +1,7 @@
 """Reference client (ledger Group 9): pure codec/parser unit tests.
 
 The client is a dependency-free dev tool; its network paths are exercised by
-hand against a running server (documented in tools/reference_client/README.md).
+hand against a running server (documented in clients/reference_client/README.md).
 What is testable without a socket is tested here: the SSE block parser, the
 frame model validator, and the RFC 6455 frame codec (encode/decode round-trip
 and incremental buffering), including the canonical handshake vector from
@@ -16,10 +16,13 @@ from pathlib import Path
 
 import pytest
 
-_SPEC = importlib.util.spec_from_file_location(
-    "realtime_client",
-    Path(__file__).resolve().parents[2] / "tools" / "reference_client" / "realtime_client.py",
+_CLIENT_PATH = (
+    Path(__file__).resolve().parents[2].parent
+    / "clients"
+    / "reference_client"
+    / "realtime_client.py"
 )
+_SPEC = importlib.util.spec_from_file_location("realtime_client", _CLIENT_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
 client = importlib.util.module_from_spec(_SPEC)
 # Register so the dataclass machinery can resolve the module's namespace.

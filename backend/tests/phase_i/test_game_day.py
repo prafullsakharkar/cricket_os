@@ -6,9 +6,9 @@ etc.), so CI runs only:
 * **dry-run smokes** — each script validates its target via the allow-list
   gate and prints a plan with **no side effects** (no report written, exit 0);
 * **G3 gate** — each script refuses a non-allow-listed target;
-* **alert sink contract** — ``ops/alerts/local_sink.py`` routes a raised alert
-  condition to ``reports/game_day/alerts.log`` and its ``runbook`` link
-  resolves to a ``## `` heading in ``docs/RUNBOOKS.md``.
+* **alert sink contract** — ``infrastructure/ops/alerts/local_sink.py`` routes a
+  raised alert condition to ``reports/game_day/alerts.log`` and its ``runbook``
+  link resolves to a ``## `` heading in ``docs/RUNBOOKS.md``.
 """
 
 from __future__ import annotations
@@ -21,9 +21,25 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]  # backend/ (scripts + manage.py live here)
+REPO_ROOT = Path(__file__).resolve().parents[3]  # repo root (reports/, docs/ live here)
 GAME_DAY_DIR = ROOT / "scripts" / "game_day"
-REPORTS_DIR = ROOT / "reports" / "game_day"
+REPORTS_DIR = REPO_ROOT / "reports" / "game_day"
+
+
+def _local_sink():
+    """Load infrastructure/ops/alerts/local_sink.py (moved off the Python path)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "local_sink", REPO_ROOT / "infrastructure" / "ops" / "alerts" / "local_sink.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["local_sink"] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 #: Every manual scenario + drill script (plan §10.1/§10.3).
 SCRIPTS = [
@@ -87,10 +103,10 @@ def test_game_day_script_refuses_non_allow_listed_target(script: str) -> None:
 
 
 def test_alert_routes_to_local_sink_with_resolvable_runbook(tmp_path: Path) -> None:
-    from ops.alerts.local_sink import route, runbook_link
+    sink = _local_sink()
 
     log_path = tmp_path / "alerts.log"
-    returned = route(
+    returned = sink.route(
         "LiveMatchStale",
         "warning",
         "Provider outage",
@@ -103,14 +119,14 @@ def test_alert_routes_to_local_sink_with_resolvable_runbook(tmp_path: Path) -> N
     assert entry["alert"] == "LiveMatchStale"
     assert entry["severity"] == "warning"
     link = entry["runbook"]
-    assert link == runbook_link("Provider outage")
+    assert link == sink.runbook_link("Provider outage")
     section = link.split("#", 1)[1].replace("and", "&")
-    runbooks = (ROOT / "docs" / "RUNBOOKS.md").read_text(encoding="utf-8")
+    runbooks = (REPO_ROOT / "docs" / "RUNBOOKS.md").read_text(encoding="utf-8")
     assert re.search(rf"^## .*{section.replace('-', ' ')}", runbooks, re.IGNORECASE | re.MULTILINE)
 
 
 def test_alert_sink_rejects_unknown_runbook_section(tmp_path: Path) -> None:
-    from ops.alerts.local_sink import route
+    sink = _local_sink()
 
     with pytest.raises(LookupError, match="not found"):
-        route("SomeAlert", "critical", "No such section", {}, log_path=tmp_path / "a.log")
+        sink.route("SomeAlert", "critical", "No such section", {}, log_path=tmp_path / "a.log")

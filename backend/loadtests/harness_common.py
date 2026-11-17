@@ -32,7 +32,7 @@ from typing import Any
 from loadtests.safety import TargetNotAllowed, assert_target_allowed
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORTS_DIR = ROOT / "reports" / "phase_i" / "load"
+REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports" / "phase_i" / "load"
 
 #: Local topology the harnesses measure against (G2 gate fails → no staging).
 LOCAL_TOPOLOGY = (

@@ -35,7 +35,7 @@ LEAVES = [
     ("administration", "0002_seed_groups"),
 ]
 
-#: The 19 reference-data tables (ci/schema_drift_scope.txt).
+#: The 19 reference-data tables (scripts/ci/schema_drift_scope.txt).
 SCOPED_TABLES = [
     "country",
     "governing_body",

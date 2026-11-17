@@ -36,6 +36,8 @@ from apps.fantasy.services.adjustments import apply_adjustment
 
 from .factories import add_stat, make_completed_match, make_ruleset_version
 
+REPO_ROOT = Path(__file__).resolve().parents[3]  # repo root (alerts/, docs/ live here)
+
 pytestmark = pytest.mark.django_db
 
 #: Every metric the fantasy module registers (Task 8 plan).
@@ -256,7 +258,9 @@ def test_queue_depth_tracks_pending_enqueues() -> None:
 
 
 def _load_fantasy_alerts() -> list[dict[str, object]]:
-    with Path("ops/alerts/fantasy_alerts.yml").open(encoding="utf-8") as handle:
+    with (REPO_ROOT / "infrastructure" / "ops" / "alerts" / "fantasy_alerts.yml").open(
+        encoding="utf-8"
+    ) as handle:
         document = yaml.safe_load(handle)
     return [rule for group in document["groups"] for rule in group["rules"]]
 
@@ -276,7 +280,7 @@ def test_fantasy_alert_exprs_reference_registered_metrics() -> None:
 
 
 def test_fantasy_alert_runbook_anchors_exist() -> None:
-    doc = Path("docs/RUNBOOKS.md").read_text(encoding="utf-8").lower()
+    doc = (REPO_ROOT / "docs" / "RUNBOOKS.md").read_text(encoding="utf-8").lower()
     for rule in _load_fantasy_alerts():
         anchor = rule["labels"]["runbook"]
         assert f"## {anchor}" in doc, f"no runbook section for {anchor!r}"

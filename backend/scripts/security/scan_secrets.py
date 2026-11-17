@@ -29,7 +29,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]  # repo root (backend/scripts/security/ -> parents[3])
 
 #: Directories never scanned (build/cache/vendored).
 SKIP_DIRS = frozenset(

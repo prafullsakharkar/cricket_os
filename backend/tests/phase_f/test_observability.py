@@ -4,8 +4,8 @@ The Phase F surfaces are instrumented through the ``apps.core.metrics`` facade:
 recompute jobs/errors/latency, the sweep watermark-lag gauge, standings
 reconciliation mismatches, leaderboard rebuilds, rankings imports and search
 queries/timeouts/latency. These tests prove the instrumentation actually fires;
-the ``ops/alerts/statistics_alerts.yml`` rules that read these metrics are
-cross-checked against the registered names + runbooks by
+the ``infrastructure/ops/alerts/statistics_alerts.yml`` rules that read these
+metrics are cross-checked against the registered names + runbooks by
 ``tests/phase_d/test_observability.py``.
 """
 

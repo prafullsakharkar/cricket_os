@@ -16,9 +16,11 @@ import yaml
 
 from apps.core import metrics
 
+REPO_ROOT = Path(__file__).resolve().parents[3]  # repo root (alerts/, docs/ live here)
+
 pytestmark = pytest.mark.django_db
 
-SHADOW_ALERT_FILE = "ops/alerts/shadow_alerts.yml"
+SHADOW_ALERT_FILE = REPO_ROOT / "infrastructure" / "ops" / "alerts" / "shadow_alerts.yml"
 
 #: Exact rule set (protects against accidental rule edits).
 _SHADOW_ALERTS = {
@@ -83,7 +85,7 @@ def test_shadow_alert_exprs_reference_registered_metrics() -> None:
 
 def test_shadow_alert_runbook_labels_match_runbook_headings() -> None:
     runbook_names = {rule["labels"]["runbook"] for rule in _load_alerts()}
-    with Path("docs/RUNBOOKS.md").open(encoding="utf-8") as handle:
+    with (REPO_ROOT / "docs" / "RUNBOOKS.md").open(encoding="utf-8") as handle:
         runbook_doc = handle.read().lower()
     for name in runbook_names:
         assert f"## {name}" in runbook_doc, f"no runbook section for {name!r}"

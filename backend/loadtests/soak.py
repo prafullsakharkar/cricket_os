@@ -15,9 +15,9 @@ Two mid-soak operational drills are attempted at their designated seconds and
   process; the compose ``app`` service is not running in this environment, so
   the drill is recorded ``UNVERIFIED`` with the missing piece (no running
   compose app service to restart) unless it becomes available.
-* ``--failover-after`` — a replica failover. ``docker-compose.yml`` has **no
-  ``db-replica`` service** (pg_basebackup + ``primary_conninfo`` are absent) and
-  the local Postgres is not configured for streaming replication
+* ``--failover-after`` — a replica failover. ``infrastructure/compose/compose.yml``
+  has **no ``db-replica`` service** (pg_basebackup + ``primary_conninfo`` are
+  absent) and the local Postgres is not configured for streaming replication
   (``wal_level``/``max_wal_senders``), so the attempt is recorded ``UNVERIFIED``
   with exactly those missing pieces — never faked.
 
@@ -94,8 +94,9 @@ def _attempt_failover() -> dict[str, object]:
     return {
         "status": "UNVERIFIED",
         "missing_piece": (
-            "docker-compose.yml has no 'db-replica' service (pg_basebackup "
-            "bootstrap + primary_conninfo absent) and the local Postgres is not "
+            "infrastructure/compose/compose.yml has no 'db-replica' service "
+            "(pg_basebackup bootstrap + primary_conninfo absent) and the local "
+            "Postgres is not "
             "configured for streaming replication (wal_level/max_wal_senders); "
             "the failover attempt cannot run here and is not faked"
         ),

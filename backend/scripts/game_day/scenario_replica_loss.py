@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Game day §10.1: replica loss — reads continue on the primary.
 
-The local stack has **no replica** (plan §9.4: ``docker-compose.yml`` has no
+The local stack has **no replica** (plan §9.4:
+``infrastructure/compose/compose.yml`` has no
 ``db-replica`` service and the local Postgres is not configured for streaming
 replication). Per the plan's honest fallback this scenario records
 ``UNVERIFIED`` with the exact missing piece instead of faking a failover, and
@@ -82,8 +83,9 @@ def main() -> None:
     read_ms = common.elapsed_ms(started)
 
     missing = (
-        "docker-compose.yml has no 'db-replica' service (pg_basebackup bootstrap "
-        "and primary_conninfo absent) and the local Postgres is not configured "
+        "infrastructure/compose/compose.yml has no 'db-replica' service "
+        "(pg_basebackup bootstrap and primary_conninfo absent) and the local "
+        "Postgres is not configured "
         "for streaming replication (wal_level/max_wal_senders); a replica-loss "
         "failover cannot be attempted here and is not faked"
     )

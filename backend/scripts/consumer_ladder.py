@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Phase I Task 7 §11.1 — consumer fallback ladder through the proxy.
 
-Runs the reference client (``tools/reference_client/realtime_client.py``)
+Runs the reference client (``clients/reference_client/realtime_client.py``)
 across the fallback ladder — REST snapshot → SSE resume → WS resume → REST
-resync — against the nginx proxy (``ops/proxy/nginx.conf``) and reports each
+resync — against the nginx proxy (``infrastructure/docker/nginx/nginx.conf``)
+and reports each
 hop's latency plus any **proxy-induced failures**:
 
 * *buffering delay* — an SSE/WS stream whose first body bytes arrive late
@@ -35,11 +36,11 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]  # backend/ (sys.path)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 # Make the reference client importable (it is not a package).
-REF_CLIENT_DIR = ROOT / "tools" / "reference_client"
+REF_CLIENT_DIR = ROOT.parent / "clients" / "reference_client"
 if str(REF_CLIENT_DIR) not in sys.path:
     sys.path.insert(0, str(REF_CLIENT_DIR))
 
@@ -48,7 +49,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 from scripts.game_day import common  # noqa: E402
 
 SCENARIO = "consumer_ladder"
-REPORT_PATH = ROOT / "reports" / "phase_i" / "consumer_ladder.md"
+REPORT_PATH = ROOT.parent / "reports" / "phase_i" / "consumer_ladder.md"
 
 #: First-frame latency above this (s) flags proxy buffering on the stream.
 BUFFERING_THRESHOLD_SECONDS = 2.0
@@ -316,7 +317,7 @@ def _report(
     lines.append("")
     lines.append(
         "Ladder: REST snapshot -> SSE resume (Last-Event-ID) -> WS resume "
-        "(from_seq) -> REST resync. Proxy: `ops/proxy/nginx.conf`. "
+        "(from_seq) -> REST resync. Proxy: `infrastructure/docker/nginx/nginx.conf`. "
         "UNVERIFIED: gate G2 FAILS — local topology only, not production."
     )
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")

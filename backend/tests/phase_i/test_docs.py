@@ -24,9 +24,10 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # repo root (docs/ lives here)
+BACKEND = Path(__file__).resolve().parents[2]  # backend/ (config/ lives here)
 DOCS = REPO_ROOT / "docs"
-SETTINGS = REPO_ROOT / "config" / "settings" / "base.py"
+SETTINGS = BACKEND / "config" / "settings" / "base.py"
 
 LAUNCH_DOCS = ("LAUNCH_PLAN.md", "GO_NO_GO.md", "FEATURE_FLAGS.md")
 

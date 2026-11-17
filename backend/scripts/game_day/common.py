@@ -24,8 +24,8 @@ from typing import Any
 
 from loadtests.safety import assert_target_allowed
 
-ROOT = Path(__file__).resolve().parents[2]
-REPORTS_DIR = ROOT / "reports" / "game_day"
+ROOT = Path(__file__).resolve().parents[2]  # backend/ (sys.path)
+REPORTS_DIR = Path(__file__).resolve().parents[3] / "reports" / "game_day"  # repo-root reports/
 
 
 def add_args(parser: argparse.ArgumentParser, *, scenario: str) -> None:

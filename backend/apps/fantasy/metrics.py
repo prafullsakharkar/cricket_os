@@ -7,7 +7,7 @@ exposition. Cardinality rule (SECURITY ยง8): labels carry only bounded values โ€
 22-metric registry, never an unbounded id.
 
 The three alert rules that consume these names live in
-``ops/alerts/fantasy_alerts.yml``; their runbook anchors are in
+``infrastructure/ops/alerts/fantasy_alerts.yml``; their runbook anchors are in
 ``docs/RUNBOOKS.md`` (``## Fantasy pipeline``).
 """
 

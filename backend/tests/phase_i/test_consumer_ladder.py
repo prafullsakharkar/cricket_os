@@ -20,8 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LADDER = ROOT / "scripts" / "consumer_ladder.py"
-NGINX_CONF = ROOT / "ops" / "proxy" / "nginx.conf"
-REPORT = ROOT / "reports" / "phase_i" / "consumer_ladder.md"
+NGINX_CONF = ROOT.parent / "infrastructure" / "docker" / "nginx" / "nginx.conf"
+REPORT = ROOT.parent / "reports" / "phase_i" / "consumer_ladder.md"
 
 #: The SSE location block: everything between its open and close brace.
 SSE_LOCATION = "/api/v1/sse/"

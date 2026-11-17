@@ -20,7 +20,7 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]  # repo root (docs/ lives here)
 
 GATE_MARKER = "Gate NOT met"
 

@@ -21,6 +21,8 @@ from rest_framework.test import APIClient
 
 from apps.core import metrics
 
+REPO_ROOT = Path(__file__).resolve().parents[3]  # repo root (alerts/, docs/ live here)
+
 pytestmark = pytest.mark.django_db
 
 
@@ -117,8 +119,10 @@ def _load_alerts(path: str) -> list[dict[str, object]]:
 
 
 #: Alert -> exact rule set per file (protects against accidental rule edits).
+_ALERT_DIR = REPO_ROOT / "infrastructure" / "ops" / "alerts"
+
 _ALERT_FILES: dict[str, set[str]] = {
-    "ops/alerts/live_alerts.yml": {
+    str(_ALERT_DIR / "live_alerts.yml"): {
         "LiveMatchStale",
         "CircuitBreakerOpen",
         "DLQDepthHigh",
@@ -127,7 +131,7 @@ _ALERT_FILES: dict[str, set[str]] = {
         "ProviderLagHigh",
         "EventPublishFailures",
     },
-    "ops/alerts/realtime_alerts.yml": {
+    str(_ALERT_DIR / "realtime_alerts.yml"): {
         "RealtimeDegraded",
         "RealtimeDroppedHigh",
         "RealtimeGapBackfills",
@@ -138,7 +142,7 @@ _ALERT_FILES: dict[str, set[str]] = {
         "CacheDegraded",
         "CacheMissRatioHigh",
     },
-    "ops/alerts/statistics_alerts.yml": {
+    str(_ALERT_DIR / "statistics_alerts.yml"): {
         "StatisticsRecomputeErrors",
         "StatisticsWatermarkLagHigh",
         "StandingsReconciliationMismatch",
@@ -146,12 +150,12 @@ _ALERT_FILES: dict[str, set[str]] = {
         "SearchTimeoutHigh",
         "RankingsImportStalled",
     },
-    "ops/alerts/fantasy_alerts.yml": {
+    str(_ALERT_DIR / "fantasy_alerts.yml"): {
         "FantasyStaleCalc",
         "FantasyRecomputeFailures",
         "FantasyVerifyMismatch",
     },
-    "ops/alerts/shadow_alerts.yml": {
+    str(_ALERT_DIR / "shadow_alerts.yml"): {
         "ShadowMismatchRateHigh",
         "ShadowUnresolvedIdentityHigh",
         "ShadowCorrectionLagHigh",
@@ -216,7 +220,7 @@ def test_alert_rules_file_parses_and_cross_checks() -> None:
 
     # Every alert maps to a runbook heading in docs/RUNBOOKS.md (headings are
     # Title Case; alert labels are lowercase identifiers).
-    with Path("docs/RUNBOOKS.md").open(encoding="utf-8") as handle:
+    with (REPO_ROOT / "docs" / "RUNBOOKS.md").open(encoding="utf-8") as handle:
         runbook_doc = handle.read().lower()
     for name in runbook_names:
         assert f"## {name}" in runbook_doc, f"no runbook section for {name!r}"

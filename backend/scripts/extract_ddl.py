@@ -11,7 +11,8 @@ import re
 import sys
 from pathlib import Path
 
-path = Path(sys.argv[1] if len(sys.argv) > 1 else "docs/CRICKET_DATABASE_SCHEMA.md")
+default_doc = Path(__file__).resolve().parents[2] / "docs" / "CRICKET_DATABASE_SCHEMA.md"
+path = Path(sys.argv[1] if len(sys.argv) > 1 else default_doc)
 doc = path.read_text(encoding="utf-8")
 
 start = re.search(r"^## 3\. ", doc, re.M)

@@ -44,7 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]  # backend (sys.path; manage.py lives here)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -52,8 +52,10 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 
 from loadtests.safety import assert_target_allowed  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parents[3]  # repo root (reports/ lives here)
+
 SCENARIO = "dast"
-REPORT_DIR = ROOT / "reports" / "security"
+REPORT_DIR = REPO_ROOT / "reports" / "security"
 VENV_BIN = Path(sys.executable).parent
 SCHEMAThesis_BIN = VENV_BIN / "schemathesis"
 MANAGE = ROOT / "manage.py"

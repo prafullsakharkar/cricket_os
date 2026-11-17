@@ -30,7 +30,7 @@ LEAVES = [
     ("synchronization", "0001_initial"),
 ]
 
-#: The 24 Phase C tables (ci/schema_drift_scope.txt additions).
+#: The 24 Phase C tables (scripts/ci/schema_drift_scope.txt additions).
 PHASE_C_TABLES = [
     "match",
     "match_team",

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]  # repo root (infrastructure/ops/alerts/ -> parents[3])
 LOG_PATH = ROOT / "reports" / "game_day" / "alerts.log"
 RUNBOOKS = ROOT / "docs" / "RUNBOOKS.md"
 
