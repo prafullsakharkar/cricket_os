@@ -86,7 +86,7 @@ per week for completed matches and near-zero during live play; `UNVERIFIED`.
 
 ## 6. Game-day drills & evidence
 
-The game-day scenario scripts (`scripts/game_day/`) and their reports
+The game-day scenario scripts (`backend/scripts/game_day/`) and their reports
 (`reports/game_day/`) exercise every queue above against the local stack.
 Drill status is recorded honestly: replica-loss and Redis-failover drills are
 `UNVERIFIED` in this environment (missing pieces named, never faked).
@@ -94,7 +94,7 @@ Drill status is recorded honestly: replica-loss and Redis-failover drills are
 ## Readiness status
 
 - **Sinks & runbooks**: alert routing is delivered to a local sink
-  (`ops/alerts/local_sink.py` → `reports/game_day/alerts.log`); the real
+  (`infrastructure/ops/alerts/local_sink.py` → `reports/game_day/alerts.log`); the real
   on-call channel step is **blocked/UNVERIFIED** (needs `docs/STAGING_ACCESS.md`).
 - **Queue volumes**: `ASSUMED` from the replay corpus; re-estimate from staging
   shadow data before launch.

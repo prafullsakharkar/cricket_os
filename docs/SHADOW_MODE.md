@@ -62,7 +62,7 @@ PROVIDER_SHADOW_MODE=true uv run python manage.py shadow_report [--day YYYY-MM-D
 `shadow_corrections_total`, `shadow_unresolved_identity_total`,
 `shadow_schema_drift_total`, `shadow_coverage_gaps_total`.
 
-Alerts in `ops/alerts/shadow_alerts.yml` (contract-tested against registered
+Alerts in `infrastructure/ops/alerts/shadow_alerts.yml` (contract-tested against registered
 metrics + `docs/RUNBOOKS.md` `## Shadow mode` section); thresholds are
 PROPOSED (`docs/LAUNCH_CRITERIA.md`).
 

@@ -84,7 +84,7 @@ testing, a phased roadmap, and a risk register.
   reflected (endpoint implementation note, `search` module row, digest-validated
   serving model + search timeout budget, Tier-2 pipeline pointer,
   `StatisticsWatermark`, Phase F test gates).
-- **`ops/alerts/statistics_alerts.yml` + `docs/RUNBOOKS.md`** — 6 rules and
+- **`infrastructure/ops/alerts/statistics_alerts.yml` + `docs/RUNBOOKS.md`** — 6 rules and
   Statistics pipeline / Search / Rankings runbook sections.
 
 ### 2026-11-05 — Phase E (frontend APIs & real-time) implemented
@@ -130,7 +130,7 @@ testing, a phased roadmap, and a risk register.
   full configuration-flag table, and metrics/alerts.
 - **New `RUNBOOKS.md`** — runbooks for provider outage, schema drift, stuck
   checkpoint, wrong score complaint, DLQ triage, realtime gap, and identity
-  conflict; every alert in `ops/alerts/live_alerts.yml` maps 1:1 to a runbook.
+  conflict; every alert in `infrastructure/ops/alerts/live_alerts.yml` maps 1:1 to a runbook.
 - **CRICKET_IMPLEMENTATION_ROADMAP.md** — Phase D marked implemented.
 - **CRICKET_BACKEND_ARCHITECTURE.md** — `matches` owns `MatchEventLog`; new
   `live` module row; `realtime` consumes the Phase D event stream.

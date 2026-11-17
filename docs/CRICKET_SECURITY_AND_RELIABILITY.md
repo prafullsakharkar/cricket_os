@@ -118,19 +118,19 @@ satisfies Phase 10 of the brief and is referenced from the README.
   `realtime_dropped_frames_total`, `realtime_gap_backfills_total`,
   `realtime_resyncs_total`, `realtime_cap_denied_total`,
   `cache_hits/misses` (namespaced), `cache_degraded_total`,
-  `cache_breaker_open`; alerts in `ops/alerts/realtime_alerts.yml`
+  `cache_breaker_open`; alerts in `infrastructure/ops/alerts/realtime_alerts.yml`
   (`RealtimeDegraded`, `RealtimeDroppedHigh`, `RealtimeGapBackfills`,
   `RealtimeResyncsHigh`, `RealtimeCapDeniedHigh`, `RealtimeConnectionsNearCap`,
   `CacheBreakerOpen`, `CacheDegraded`, `CacheMissRatioHigh`).
 - **Alerts** route to on-call with runbooks; every alert maps to an actionable
-  runbook (see §10). Both alert files (`ops/alerts/live_alerts.yml`,
-  `ops/alerts/realtime_alerts.yml`) are validated by a contract test against
+  runbook (see §10). Both alert files (`infrastructure/ops/alerts/live_alerts.yml`,
+  `infrastructure/ops/alerts/realtime_alerts.yml`) are validated by a contract test against
   the registered metric names and `docs/RUNBOOKS.md` headings.
 - **Fantasy (Phase H):** `fantasy_recompute_lag` / `fantasy_queue_depth` /
   `fantasy_sweep_findings` / `fantasy_recompute_seconds` (histogram) /
   `fantasy_recompute_failures_total` / `fantasy_partial_rate` /
   `fantasy_unsupported_rule_counts{metric}` / `fantasy_ledger_growth` /
-  `fantasy_verify_mismatches_total`; alerts in `ops/alerts/fantasy_alerts.yml`
+  `fantasy_verify_mismatches_total`; alerts in `infrastructure/ops/alerts/fantasy_alerts.yml`
   (`FantasyStaleCalc`, `FantasyRecomputeFailures`, `FantasyVerifyMismatch`),
   runbooks `## Fantasy pipeline` / `## Fantasy points dispute`. The same
   contract test covers the fantasy alert file.
@@ -165,7 +165,7 @@ satisfies Phase 10 of the brief and is referenced from the README.
 > **Phase D implementation:** every recovery path is idempotent (per-match
 > advisory lock + `delivery_seq` resume + `is_current` revisioning). Runbooks
 > for the full Phase D surface live in [RUNBOOKS.md](RUNBOOKS.md); the alert
-> rules that page on-call are in `ops/alerts/live_alerts.yml` (each alert maps
+> rules that page on-call are in `infrastructure/ops/alerts/live_alerts.yml` (each alert maps
 > 1:1 to a runbook). Circuit breakers are registered in a small registry that
 > the read API consults for `meta.stale` — a provider failure never blocks
 > reads (see §8 and [LIVE_INGESTION.md](LIVE_INGESTION.md)).

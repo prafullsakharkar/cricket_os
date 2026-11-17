@@ -25,7 +25,7 @@ for Cricket OS. Items are traced from earlier documents where relevant.
 | RSK-14 | Migrations cause downtime on large tables | Medium | Medium | Expand/contract; `CONCURRENTLY`; migration tests at scale; backup gate |
 | RSK-15 | Scope creep into out-of-scope features (news, betting, paid fantasy) | Medium | Medium | Explicit out-of-scope list enforced in backlog review |
 | RSK-16 | Match-merge mistakes merge two distinct matches | Low | High | Reversible merge/split + audit + selector exclusion; 301 redirect map; reviewed by steward (Phase I Task 4c evidence) |
-| RSK-17 | Proxy-induced SSE/WS breakage (buffering, gzip, upgrade drops) | Low | Medium | `ops/proxy/nginx.conf` (never buffer/compress SSE, upgrade passthrough, `Host` passthrough) + consumer-ladder validation (Task 7) |
+| RSK-17 | Proxy-induced SSE/WS breakage (buffering, gzip, upgrade drops) | Low | Medium | `infrastructure/docker/nginx/nginx.conf` (never buffer/compress SSE, upgrade passthrough, `Host` passthrough) + consumer-ladder validation (Task 7) |
 | RSK-18 | False confidence from local-only measurements | High | Medium | MEASURED/ASSUMED/UNVERIFIED tagging discipline; every staged figure names the missing gate (Phase I §Gates) |
 
 ### Risk re-rating with Phase I evidence (2026-11-13)
@@ -39,7 +39,7 @@ for Cricket OS. Items are traced from earlier documents where relevant.
 | RSK-06 | **re-rated**: breaker/cache-fallback/`stale` behaviour demonstrated locally (outage drill: 3 polls to open, stale skip, probe closes) | `reports/game_day/scenario_provider_outage-20261113T145020Z.md` |
 | RSK-08 | **re-rated**: identity linking batch + continuity evidence on real local data; real provider ID stability remains UNVERIFIED (G1) | `reports/phase_i/task3_identity_evidence.md` |
 | RSK-12 | **unchanged** (G1) — rankings remain provider-gated | `GO_NO_GO.md` §2 |
-| RSK-13 | **re-rated**: `make test-secrets` fails CI on real-credential patterns; redaction verified; credential rotation drill passes | `scripts/security/scan_secrets.py`, `reports/game_day/scenario_expired_credential-20261113T161035Z.md` |
+| RSK-13 | **re-rated**: `make test-secrets` fails CI on real-credential patterns; redaction verified; credential rotation drill passes | `backend/scripts/security/scan_secrets.py`, `reports/game_day/scenario_expired_credential-20261113T161035Z.md` |
 | RSK-14 | **re-rated**: reversible migrations verified (failed-migration drill: broken migration halts deploy, scratch DB dropped, dev intact) | `reports/game_day/scenario_failed_migration-20261113T160347Z.md` |
 
 ---

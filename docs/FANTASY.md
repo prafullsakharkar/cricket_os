@@ -227,7 +227,7 @@ Metrics (in `apps/fantasy/metrics.py`, rendered by the internal `/metrics`):
 `fantasy_recompute_seconds` (histogram), `fantasy_recompute_failures_total`,
 `fantasy_partial_rate`, `fantasy_unsupported_rule_counts{metric}` (bounded
 label), `fantasy_ledger_growth`, `fantasy_verify_mismatches_total`. Alerts in
-`ops/alerts/fantasy_alerts.yml` (`FantasyStaleCalc`, `FantasyRecomputeFailures`,
+`infrastructure/ops/alerts/fantasy_alerts.yml` (`FantasyStaleCalc`, `FantasyRecomputeFailures`,
 `FantasyVerifyMismatch`); runbooks in `docs/RUNBOOKS.md` (`## Fantasy
 pipeline`, `## Fantasy points dispute`).
 

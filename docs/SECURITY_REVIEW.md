@@ -24,7 +24,7 @@ production** unless stated otherwise. **No penetration test has occurred.**
 | `make typecheck` (mypy) | 0 errors | ✅ pass | `make check` runs it |
 | `make imports` (import-linter) | boundaries hold | ✅ pass | `make check` runs it |
 | `make test` + phase suites | all green | ✅ pass | `make check` runs them |
-| `make test-secrets` (secret scan) | **new in this task** | ✅ pass | `scripts/security/scan_secrets.py`; clean on the tree |
+| `make test-secrets` (secret scan) | **new in this task** | ✅ pass | `backend/scripts/security/scan_secrets.py`; clean on the tree |
 | `make test-security` (aggregate) | **new in this task** | ✅ pass | 112 tests, see §3 |
 
 The secret scan (`make test-secrets`) greps the tree for real-credential
@@ -34,7 +34,7 @@ URLs carrying passwords — and **fails on hits**. `.env` files (the real secret
 live there, gitignored) and binary/serialized artifacts are excluded;
 `.env.example` is scanned (placeholders only). The documented local dev URLs
 (`postgres:postgres@localhost:…`) are not flagged. Pattern inventory:
-`python scripts/security/scan_secrets.py --list`.
+`python backend/scripts/security/scan_secrets.py --list`.
 
 ## 2. Release-candidate verification
 
@@ -63,7 +63,7 @@ at the Phase I RC). The contract fixes added `tests/api/test_error_envelope.py`
 
 ## 4. DAST-equivalent scan (§12.2) — local topology, G3-gated
 
-`scripts/security/dast_scan.py` calls `assert_target_allowed` (gate G3) before
+`backend/scripts/security/dast_scan.py` calls `assert_target_allowed` (gate G3) before
 any request and runs the documented equivalent scanners — **OWASP ZAP is NOT
 present in this environment** and is recorded NOT-RUN; **no penetration test
 is claimed**. The equivalent scanners are real and installed:

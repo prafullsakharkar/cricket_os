@@ -4,7 +4,7 @@ How Cricket OS serves fast reads and live updates, and how the two subsystems
 fit together. This is the implementation companion to the wire contract in
 [FRONTEND_CONTRACT.md](FRONTEND_CONTRACT.md) (what clients see) and the
 load-test budgets in [CRICKET_PERFORMANCE_AND_SCALING.md §8](CRICKET_PERFORMANCE_AND_SCALING.md)
-and `loadtests/` (how fast it must be).
+and `backend/loadtests/` (how fast it must be).
 
 ```
                     ┌───────────────────────────┐
@@ -223,7 +223,7 @@ cache families:
   `realtime_resyncs_total`, `realtime_cap_denied_total`, `realtime_coalesced_total`,
   `realtime_drains_total`, `realtime_licence_filtered_total`.
 
-Alerts live in `ops/alerts/realtime_alerts.yml` (9 rules: `RealtimeDegraded`,
+Alerts live in `infrastructure/ops/alerts/realtime_alerts.yml` (9 rules: `RealtimeDegraded`,
 `RealtimeDroppedHigh`, `RealtimeGapBackfills`, `RealtimeResyncsHigh`,
 `RealtimeCapDeniedHigh`, `RealtimeConnectionsNearCap`, `CacheBreakerOpen`,
 `CacheDegraded`, `CacheMissRatioHigh`), each mapping to a runbook section in
@@ -254,7 +254,7 @@ Alerts live in `ops/alerts/realtime_alerts.yml` (9 rules: `RealtimeDegraded`,
 ## 7. Load budgets
 
 `make test-loadtest-smoke` (CI) enforces acceptance #10 in-process
-(`loadtests/smoke_gate.py`); `loadtests/k6/` has manual capacity scripts for a
+(`backend/loadtests/smoke_gate.py`); `backend/loadtests/k6/` has manual capacity scripts for a
 deployed node:
 
 | Budget | Gate | Typical measured |

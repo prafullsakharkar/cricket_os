@@ -20,7 +20,7 @@ what a failure implies.
 | Database | docker-compose PostgreSQL (single primary; no replica) |
 | Cache / throttle / hub | 1 Redis (7.x) |
 | Worker | 1 Celery worker (local) |
-| Client | `urllib`-based harnesses in `loadtests/` (single-process, paced) |
+| Client | `urllib`-based harnesses in `backend/loadtests/` (single-process, paced) |
 
 The local topology is **smaller than the planning stage** in every dimension:
 1 app node vs 2–4 at Growth, no CDN, no read replica, no connection pool at
@@ -50,7 +50,7 @@ SLO targets are from `CRICKET_PERFORMANCE_AND_SCALING.md` §12. Status values:
 | Drill | Attempted? | Result | Missing piece |
 |---|---|---|---|
 | Mid-soak deploy (restart ASGI app) | Yes (t=12 s in smoke) | `UNVERIFIED` | no running `docker-compose` `app` service in this environment — the local stack is a directly-run ASGI process; a real deploy restart must be measured on staging |
-| Replica failover (promote/demote `db-replica`) | Yes (t=18 s in smoke) | `UNVERIFIED` | `docker-compose.yml` has **no `db-replica` service** (pg_basebackup bootstrap + `primary_conninfo` absent) and the local Postgres is not configured for streaming replication (`wal_level`/`max_wal_senders`). The attempt cannot run here and is **not faked**. |
+| Replica failover (promote/demote `db-replica`) | Yes (t=18 s in smoke) | `UNVERIFIED` | `infrastructure/compose/compose.yml` has **no `db-replica` service** (pg_basebackup bootstrap + `primary_conninfo` absent) and the local Postgres is not configured for streaming replication (`wal_level`/`max_wal_senders`). The attempt cannot run here and is **not faked**. |
 
 ## 4. Tagged figures
 
@@ -60,13 +60,13 @@ production is `ASSUMED`. Commands and dates:
 
 | Figure | Command (env) | Date (UTC) | Report |
 |---|---|---|---|
-| Read soak p95 16.6 ms | `TARGET_ALLOWLIST=localhost:8000 uv run python loadtests/harness_read_soak.py --target localhost:8000 --duration 10 --rate 15` | 2026-11-13 12:41 | `reports/phase_i/load/harness_read_soak-20261113T124108Z.json` |
-| Marquee p95 46.4 ms / 0 5xx / 526×429 | `uv run python loadtests/harness_marquee_spike.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --rate 200 --ramp 5 --hold 5` | 2026-11-13 12:35 | `harness_marquee_spike-20261113T123535Z.json` |
-| Deliveries p95 60.5 ms | `uv run python loadtests/harness_deliveries_feed.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --innings 1 --duration 8 --rate 2` | 2026-11-13 11:18 | `harness_deliveries_feed-20261113T111854Z.json` |
-| Realtime reconnect p95 23.3 ms | `uv run python loadtests/harness_realtime_reconnect.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --duration 6 --rate 1` | 2026-11-13 11:34 | `harness_realtime_reconnect-20261113T113404Z.json` |
-| Ingest 196.6 fixtures/s, DLQ 0 | `TARGET_ALLOWLIST=localhost:55435 uv run python loadtests/harness_ingest_throughput.py --target localhost:55435 --fixtures 5` | 2026-11-13 10:33 | `harness_ingest_throughput-20261113T103358Z.json` |
-| Correction burst 0 lock errors, p95 745.5 ms | `TARGET_ALLOWLIST=localhost:55435 uv run python loadtests/harness_correction_burst.py --target localhost:55435 --workers 4 --burst 8` | 2026-11-13 10:56 | `harness_correction_burst-20261113T105647Z.json` |
-| Soak smoke 25 s + drills | `uv run python loadtests/soak.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --duration 25 --rate 10 --rt-rate 1 --ingest-every 8 --deploy-after 12 --failover-after 18` | 2026-11-13 11:35 | `soak-20261113T113507Z.json` |
+| Read soak p95 16.6 ms | `TARGET_ALLOWLIST=localhost:8000 cd backend && uv run python loadtests/harness_read_soak.py --target localhost:8000 --duration 10 --rate 15` | 2026-11-13 12:41 | `reports/phase_i/load/harness_read_soak-20261113T124108Z.json` |
+| Marquee p95 46.4 ms / 0 5xx / 526×429 | `cd backend && uv run python loadtests/harness_marquee_spike.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --rate 200 --ramp 5 --hold 5` | 2026-11-13 12:35 | `harness_marquee_spike-20261113T123535Z.json` |
+| Deliveries p95 60.5 ms | `cd backend && uv run python loadtests/harness_deliveries_feed.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --innings 1 --duration 8 --rate 2` | 2026-11-13 11:18 | `harness_deliveries_feed-20261113T111854Z.json` |
+| Realtime reconnect p95 23.3 ms | `cd backend && uv run python loadtests/harness_realtime_reconnect.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --duration 6 --rate 1` | 2026-11-13 11:34 | `harness_realtime_reconnect-20261113T113404Z.json` |
+| Ingest 196.6 fixtures/s, DLQ 0 | `TARGET_ALLOWLIST=localhost:55435 cd backend && uv run python loadtests/harness_ingest_throughput.py --target localhost:55435 --fixtures 5` | 2026-11-13 10:33 | `harness_ingest_throughput-20261113T103358Z.json` |
+| Correction burst 0 lock errors, p95 745.5 ms | `TARGET_ALLOWLIST=localhost:55435 cd backend && uv run python loadtests/harness_correction_burst.py --target localhost:55435 --workers 4 --burst 8` | 2026-11-13 10:56 | `harness_correction_burst-20261113T105647Z.json` |
+| Soak smoke 25 s + drills | `cd backend && uv run python loadtests/soak.py --target localhost:8000 --match-id 01a1d48f-b1a9-7000-b091-b296048c7f52 --duration 25 --rate 10 --rt-rate 1 --ingest-every 8 --deploy-after 12 --failover-after 18` | 2026-11-13 11:35 | `soak-20261113T113507Z.json` |
 
 ## 5. Findings that feed launch planning
 

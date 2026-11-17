@@ -187,7 +187,7 @@ counter that is part of the cache key) to avoid wildcard deletes.
   in-process); Origin allowlist rejects cross-site streams. Both are checked
   before a subscription is created.
 - **Budgets:** `make test-loadtest-smoke` enforces p95 cached read ≤ 200 ms and
-  fan-out ≤ 1 s in CI (`loadtests/`); k6 scripts in `loadtests/k6/` cover
+  fan-out ≤ 1 s in CI (`backend/loadtests/`); k6 scripts in `backend/loadtests/k6/` cover
   manual capacity runs.
 
 ---

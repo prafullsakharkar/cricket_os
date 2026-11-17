@@ -120,7 +120,7 @@ the fantasy product/legal gate (`FANTASY_PRODUCT_DECISION.md`) exists.
 
 - **Status page** — public status at the CDN edge (PROPOSED: `status.example.com`);
   degraded/full-outage states wired to the alert sink
-  (`ops/alerts/local_sink.py` → on-call in staging).
+  (`infrastructure/ops/alerts/local_sink.py` → on-call in staging).
 - **Incident roles** — `docs/RUNBOOKS.md` §Incident roles: a primary on-call
   (pages), a secondary (escalation), and a data steward on-call for
   data-quality pages (DLQ growth, mismatch caps). Who pages whom is the

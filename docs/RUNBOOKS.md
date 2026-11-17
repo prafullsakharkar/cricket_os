@@ -1,6 +1,6 @@
 # Runbooks — live ingestion, realtime & caching
 
-Every alert in `ops/alerts/*.yml` maps to a runbook here
+Every alert in `infrastructure/ops/alerts/*.yml` maps to a runbook here
 (SECURITY_AND_RELIABILITY §10): `live_alerts.yml` covers ingestion (Phase D),
 `realtime_alerts.yml` covers the realtime transports and the cache (Phase E).
 **Every recovery path is safe to run twice** — all replay/backfill operations
@@ -219,7 +219,7 @@ the affected player's career rows are consistent (Phase F aggregates).
 
 # Realtime & caching runbooks (Phase E)
 
-Alerts live in `ops/alerts/realtime_alerts.yml`. All realtime recovery is
+Alerts live in `infrastructure/ops/alerts/realtime_alerts.yml`. All realtime recovery is
 driven by the durable `match_event_log` — the hub replays from it, so delivery
 is eventually consistent even when every Redis transport is down.
 
@@ -572,7 +572,7 @@ a clean pass should produce **zero** findings — a finding here means the
 read models drifted from the raw-delivery derivation (a real data-quality bug,
 usually in the rebuild path). Every number is **UNVERIFIED** against a licensed
 provider and the staging environment (`docs/STAGING_ACCESS.md`); thresholds in
-`ops/alerts/shadow_alerts.yml` are PROPOSED (`docs/LAUNCH_CRITERIA.md`).
+`infrastructure/ops/alerts/shadow_alerts.yml` are PROPOSED (`docs/LAUNCH_CRITERIA.md`).
 
 **Recovery.**
 
