@@ -39,8 +39,8 @@ services:
     profiles: ["full"]
     build:
       context: ../..
-      dockerfile: docker/django/Dockerfile
-    command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
+      dockerfile: infrastructure/docker/django/Dockerfile
+    command: uv run uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/cricket
@@ -59,8 +59,8 @@ services:
     profiles: ["full"]
     build:
       context: ../..
-      dockerfile: docker/django/Dockerfile
-    command: celery -A config.celery worker -l info
+      dockerfile: infrastructure/docker/django/Dockerfile
+    command: uv run celery -A config.celery worker -l info
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/cricket
