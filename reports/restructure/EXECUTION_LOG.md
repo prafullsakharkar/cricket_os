@@ -250,10 +250,10 @@ Full results in `VERIFICATION_REPORT.md`. Summary:
   migration-drift steps from `backend/` (migrate, makemigrations clean,
   NO DRIFT across 59 scoped tables).
 - **V9 gates have teeth** — throwaway worktree seeded `apps.core →
-  apps.administration` import → `lint-imports` exit 1; seeded
-  `AKIAIOSFODNN7EXAMPLE` AWS key → `scan_secrets` exit 1 (first seed with a
-  `_SEEDED` suffix did not match the `\b` pattern — reseeded exactly).
-  Worktree removed.
+  apps.administration` import → `lint-imports` exit 1; seeded a synthetic
+  AWS-access-key-shaped token (matching the scan's exact regex) →
+  `scan_secrets` exit 1 (a first seed with a `_SEEDED` suffix did not match the
+  `\b` pattern — reseeded to match exactly). Worktree removed.
 - **V10–V13** — docs links 79/0 broken, 25 runbook anchors, Mermaid fences
   balanced; `git log --follow` samples per moved area show pre-restructure
   history; root-scoped stale-path grep empty; `git status` clean; only
