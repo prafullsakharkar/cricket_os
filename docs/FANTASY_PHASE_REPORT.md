@@ -19,7 +19,7 @@ deviation.
 | 7 | Flag-gated public read API (`/fantasy/rulesets` + version detail, `/fantasy/points`, `/fantasy/matches/{id}`) with meta `label: derived` + third-party notice, calc identity, drafts-never-public, merged→301, ETag/304, read cache, OpenAPI contract | `7856e55` |
 | 8 | Observability: 9-metric family + `FantasyStaleCalc` / `FantasyRecomputeFailures` / `FantasyVerifyMismatch` alerts + runbook anchors; phase-d alert contract extended | `a61dca5` |
 | 9 | Docs: `docs/FANTASY.md` + schema/domain/API/architecture/endpoint-coverage/testing/security/roadmap updates; `.env.example` | `36a0797` |
-| 10 | Coverage gate (`.coveragerc-phaseh`, `test-phaseh` in `make check`), 65 new branch/edge tests (318 total), `scripts/fantasy_benchmark.py` (report-only) | `2ee2dd2` |
+| 10 | Coverage gate (`backend/.coveragerc-phaseh`, `test-phaseh` in `make check`), 65 new branch/edge tests (318 total), `backend/scripts/fantasy_benchmark.py` (report-only) | `2ee2dd2` |
 
 ## (b) Commands + results per acceptance criterion
 
@@ -27,9 +27,9 @@ deviation.
 |---|---|---|
 | `make check` green (lint/typecheck/imports/test/scoring/identity/phasec/phasef/phaseh) | `make check` | ✅ lint clean, mypy clean, import-linter clean; `test` 1668 passed (94.98%); scoring 172 (99.07%); identity 40 (100%); phasec 184 (98.85%); phasef 137 (93.96%); **test-phaseh 318 (100% line + 100% branch)** |
 | Fantasy app ≥ 90% line | `make test-phaseh` (first leg) | ✅ 100.00% line on `apps/fantasy` |
-| Engine/authoring/ledger/adjustments ≥ 95% branch | `make test-phaseh` (second leg) | ✅ 100.00% branch (`.coveragerc-phaseh`) |
+| Engine/authoring/ledger/adjustments ≥ 95% branch | `make test-phaseh` (second leg) | ✅ 100.00% branch (`backend/.coveragerc-phaseh`) |
 | Migration drift green | `makemigrations --check --dry-run` + manifest diff | ✅ "No changes detected"; **NO-DRIFT across 57 scoped tables** (all 7 fantasy tables scoped) |
-| schema-ddl green | `extract_ddl.py \| psql -d ref_db` + `ci/ddl_checks.sql` | ✅ reference DDL applies cleanly (`ON_ERROR_STOP=1`), structural guards pass |
+| schema-ddl green | `extract_ddl.py \| psql -d ref_db` + `backend/backend/scripts/ci/ddl_checks.sql` | ✅ reference DDL applies cleanly (`ON_ERROR_STOP=1`), structural guards pass |
 | No floats / no eval / Decimal end-to-end | engine purity contract + golden/oracle/property tests | ✅ import-linter forbids `engine → apps.core`; engine tests pass |
 | Append-only + frozen immutability (every role) | `test_append_only.py` / `test_migrations.py` trigger tests | ✅ UPDATE/DELETE raise for every role incl. table owner; frozen version + rules immutable |
 | All migrations reversible | `test_migrations.py` reverse/reapply | ✅ fantasy tables drop + restore cleanly |
@@ -42,7 +42,7 @@ deviation.
 Environment: Intel Xeon Platinum 8273CL @ 2.20 GHz (112 vCPU host), 251 GiB RAM,
 PostgreSQL 17.11, Python 3.14.6, Django 6.1.2, Redis (cache under test =
 in-process LocMem). Corpus: 1,000 synthetic completed matches (T20I, 4 players
-each, realistic 9-rule frozen ruleset), scratch DB. `scripts/fantasy_benchmark.py`
+each, realistic 9-rule frozen ruleset), scratch DB. `backend/scripts/fantasy_benchmark.py`
 (report-only, token-bucket-aware sampling).
 
 | Measurement | Result |

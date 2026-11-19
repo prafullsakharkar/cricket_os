@@ -15,7 +15,7 @@ and records (a)–(g) below.
 Phase I ran **without a vendor adapter and without network access**, comparing
 against the internal **ReplayAdapter** on the local single-node topology. G3
 safety was built **first**: every load/chaos/DAST harness refuses any target
-not on the explicit `TARGET_ALLOWLIST` (`loadtests/safety.py`, empty default),
+not on the explicit `TARGET_ALLOWLIST` (`backend/loadtests/safety.py`, empty default),
 and every staged figure is tagged **MEASURED / ASSUMED / UNVERIFIED** with the
 missing gate named.
 

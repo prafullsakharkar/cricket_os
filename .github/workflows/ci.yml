@@ -5,7 +5,7 @@ name: ci
 #
 # The database service images (postgres:16, redis:7) intentionally match the
 # other schema workflows; the application itself targets PostgreSQL 17 / Redis 8
-# in production (see docker-compose.yml).
+# in production (see infrastructure/compose/compose.yml).
 
 on:
   push:
@@ -21,6 +21,9 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -37,6 +40,9 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -51,6 +57,9 @@ jobs:
 
   imports:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -65,6 +74,9 @@ jobs:
 
   migrations:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     services:
       postgres:
         image: postgres:16
@@ -95,6 +107,9 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     services:
       postgres:
         image: postgres:16
@@ -161,4 +176,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage.xml
+          path: backend/coverage.xml

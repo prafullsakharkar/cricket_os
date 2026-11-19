@@ -287,5 +287,5 @@ fallback with the same names in this offline image) exposing:
 `dlq_depth`, `ingestion_errors_total{stage}`, `circuit_breaker_state`,
 `shadow_verify_mismatches_total`, `event_publish_failures_total`,
 `event_log_lag`, `ingest_to_event_log_seconds`, `corrections_total`,
-`duplicate_suppressed_total`. Alert rules in `ops/alerts/live_alerts.yml` map
+`duplicate_suppressed_total`. Alert rules in `infrastructure/ops/alerts/live_alerts.yml` map
 1:1 to runbooks in [RUNBOOKS.md](RUNBOOKS.md).

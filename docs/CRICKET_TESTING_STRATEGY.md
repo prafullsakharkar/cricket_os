@@ -14,7 +14,7 @@ scoring engine is pure and is the primary target of fast unit testing.
 | Integration | Models, services, DB constraints, rebuild pipeline | `pytest-django`, `factory_boy`, disposable Postgres | ~25% |
 | Contract | Provider adapters, API responses | `schemathesis`, `jsonschema`, recorded fixtures | ~8% |
 | E2E | Match lifecycle, realtime, frontend-facing flows | `pytest` (hand-rolled ASGI communicators driving `config.asgi.application` — `channels.testing`/daphne are not installed) | ~5% |
-| Performance | Hot queries, load, realtime | Python in-process smoke gate (CI, `make test-loadtest-smoke`) + standalone benchmark scripts (`scripts/`, `loadtests/`) | separate |
+| Performance | Hot queries, load, realtime | Python in-process smoke gate (CI, `make test-loadtest-smoke`) + standalone benchmark scripts (`backend/scripts/`, `backend/loadtests/`) | separate |
 | Migration | Forward/backward migrations at scale | `pytest` + prod-like fixtures | CI gate |
 
 **Determinism:** freeze time; generate UUIDv7 with a seeded clock; use
@@ -190,20 +190,20 @@ Implemented in `tests/phase_e/` (no pytest-asyncio — coroutines run through
 - **Reference client** (`test_reference_client.py`): pure codec/parser tests
   (SSE block parsing, frame validation, RFC 6455 frame codec incl. the §1.3
   handshake vector) with no sockets; network paths are exercised by hand
-  (`tools/reference_client/README.md`).
+  (`clients/reference_client/README.md`).
 - **Composition root** (`test_realtime_wiring.py`): the ASGI lifespan builds the
   components and runs/stops the broker; wiring defaults raise when unconfigured.
 
 ## 12. Performance tests
 
 - **CI gate (`make test-loadtest-smoke`):** the Phase E smoke gate
-  (`loadtests/smoke_gate.py`) enforces acceptance #10 in-process — warm cached
+  (`backend/loadtests/smoke_gate.py`) enforces acceptance #10 in-process — warm cached
   `GET /api/v1/matches/live` p95 ≤ 200 ms (100 reads through
   `django.test.Client()`) and realtime fan-out ≤ 1 s (100 subscribers, 1000-frame
   burst, real coalesce ticker).
-- **Standalone benchmark scripts** (`scripts/`): ingestion throughput, live-path
+- **Standalone benchmark scripts** (`backend/scripts/`): ingestion throughput, live-path
   latency, event-log round-trip — report-only, not in CI.
-- **Manual k6 scenarios** (`loadtests/k6/`): `cache_reads.js` (warm-read soak,
+- **Manual k6 scenarios** (`backend/loadtests/k6/`): `cache_reads.js` (warm-read soak,
   p95 < 200 ms threshold) and `sse_fanout.js` (50 concurrent streams, first frame
   ≤ 1 s via the WS twin — vanilla k6 cannot stream SSE). k6 is not installed in
   CI; these target a deployed node.
@@ -341,7 +341,7 @@ requires a green reference-DDL ↔ migration drift check (§13.1).
 - **Coverage:** ≥90% overall line+branch over `apps/statistics`,
   `apps/search`, `apps/rankings` under `tests/phase_f`, then ≥95% branch on the
   pipeline modules (`recompute`, `leaderboard`, `records`, `compare`, `reads`,
-  `search`, `import_rankings`) via `.coveragerc-phasef`.
+  `search`, `import_rankings`) via `backend/.coveragerc-phasef`.
 - **Independent oracle:** an unrelated plain-Python implementation over raw
   fixture payloads must agree with the pipeline's career totals (averages, SR,
   economy, best figures, NRR, points) — guards against the engine and the
@@ -353,7 +353,7 @@ requires a green reference-DDL ↔ migration drift check (§13.1).
   a live feed.
 - **Search EXPLAIN gate:** with `enable_seqscan=off`, the plan for a `q` query
   must reference the trigram indexes — a `%` search is never a sequential scan.
-- **Alert contract:** every rule in `ops/alerts/*.yml` references a registered
+- **Alert contract:** every rule in `infrastructure/ops/alerts/*.yml` references a registered
   metric and a runbook heading; the Phase F rule files are included in the
   phase-d contract test.
 - **Query guards:** the Phase F read endpoints run under query-count ceilings
@@ -412,7 +412,7 @@ indexes (incl. partial predicates and `INCLUDE` columns), constraints, enums
 ## 17. Fantasy (Phase H) test additions
 
 The `fantasy` module ships its own gate: `make test-phaseh` runs the whole
-`tests/phase_h/` suite under `.coveragerc-phaseh` — engine/freeze/ledger at
+`tests/phase_h/` suite under `backend/.coveragerc-phaseh` — engine/freeze/ledger at
 ≥ 95% **branch**, app-wide `apps/fantasy` ≥ 90% **line** — and is wired into
 `make check` (Task 10). What the 250+ Phase H tests cover:
 
@@ -446,7 +446,7 @@ The `fantasy` module ships its own gate: `make test-phaseh` runs the whole
 - **Observability:** the fantasy metric family renders, the pipeline
   instruments it (failures/seconds/partial/unsupported/lag/findings/verify/
   ledger/queue), and the alert→metric→runbook contract holds
-  (`ops/alerts/fantasy_alerts.yml` × `docs/RUNBOOKS.md`).
+  (`infrastructure/ops/alerts/fantasy_alerts.yml` × `docs/RUNBOOKS.md`).
 
 The DB-trigger immutability tests use `pytest.raises(DatabaseError)` inside
 `transaction.atomic()` savepoints (a trigger raise aborts the surrounding

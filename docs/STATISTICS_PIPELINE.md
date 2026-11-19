@@ -125,7 +125,7 @@ guard are enforced by the Group 7 tests.
 - **Metrics:** `statistics_recompute_jobs_total{scope}`,
   `statistics_recompute_errors_total{scope}`, `statistics_recompute_seconds`,
   `statistics_watermark_lag`, `standings_reconciliation_mismatches_total`,
-  `leaderboard_rebuilds_total{scope}` — see `ops/alerts/statistics_alerts.yml`
+  `leaderboard_rebuilds_total{scope}` — see `infrastructure/ops/alerts/statistics_alerts.yml`
   and the runbooks.
 - **Backfill:** `python manage.py rebuild_statistics all [--since YYYY-MM-DD]
   [--dry-run]`; per-scope `player|team|series --ids <uuid>...`.

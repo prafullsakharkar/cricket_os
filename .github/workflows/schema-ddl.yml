@@ -8,15 +8,15 @@ on:
   pull_request:
     paths:
       - "docs/CRICKET_DATABASE_SCHEMA.md"
-      - "scripts/extract_ddl.py"
-      - "ci/ddl_checks.sql"
+      - "backend/scripts/extract_ddl.py"
+      - "backend/scripts/ci/ddl_checks.sql"
       - ".github/workflows/schema-ddl.yml"
   push:
     branches: [main]
     paths:
       - "docs/CRICKET_DATABASE_SCHEMA.md"
-      - "scripts/extract_ddl.py"
-      - "ci/ddl_checks.sql"
+      - "backend/scripts/extract_ddl.py"
+      - "backend/scripts/ci/ddl_checks.sql"
 
 permissions:
   contents: read
@@ -25,6 +25,9 @@ jobs:
   apply-ddl:
     name: DDL on PostgreSQL ${{ matrix.pg }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     strategy:
       fail-fast: false
       matrix:
@@ -60,11 +63,11 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f reference.sql
 
       - name: Structural checks
-        run: psql -v ON_ERROR_STOP=1 -f ci/ddl_checks.sql
+        run: psql -v ON_ERROR_STOP=1 -f scripts/ci/ddl_checks.sql
 
       - name: Upload extracted DDL on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: reference-ddl-pg${{ matrix.pg }}
-          path: reference.sql
+          path: backend/reference.sql

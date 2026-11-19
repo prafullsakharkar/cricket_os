@@ -26,10 +26,10 @@ interpreter for you — you do not need Python pre-installed.
 ```bash
 # 1. Get the code and create your local environment file
 git clone <repo-url> cricket_os && cd cricket_os
-cp .env.example .env                 # dev-safe defaults; never commit .env
+cp backend/.env.example backend/.env   # dev-safe defaults; never commit .env
 
-# 2. Install dependencies (creates .venv + uv.lock-backed environment)
-uv sync
+# 2. Install dependencies (creates backend/.venv, uv.lock-backed)
+cd backend && uv sync
 
 # 3. Start PostgreSQL 17 + Redis 8 and wait for them to be healthy
 make up
@@ -45,9 +45,11 @@ curl -s localhost:8000/api/v1/health
 # {"data":{"status":"ok","checks":{"database":"ok","redis":"ok"}}}
 ```
 
-If host ports `5432`/`6379` are already in use, set `POSTGRES_PORT`/`REDIS_PORT`
-(and the matching `DATABASE_URL`/`REDIS_URL`) in your `.env` — the compose file
-reads the same variables.
+All Python commands run from `backend/` (the uv project root); `make` targets
+fan into it. If host ports `5432`/`6379` are already in use, set
+`POSTGRES_PORT`/`REDIS_PORT` (and the matching `DATABASE_URL`/`REDIS_URL`) in
+`backend/.env` — Django reads it from there, and compose takes
+`POSTGRES_PORT`/`REDIS_PORT` from your shell or a repo-root `.env`.
 
 ## Common commands
 
@@ -71,8 +73,16 @@ reads the same variables.
 Operators: see the [operator guide](docs/OPERATIONS.md) (DLQ triage, identity
 and match-merge queues, corrections, wrong-score process) and the
 [runbooks](docs/RUNBOOKS.md). Game-day drills live in
-[`scripts/game_day/`](scripts/game_day/) with evidence under
+[`backend/scripts/game_day/`](backend/scripts/game_day/) with evidence under
 `reports/game_day/`.
+
+## Repository layout
+
+All Python code lives under [`backend/`](backend/README.md) (the uv project
+root); Docker/ops assets under [`infrastructure/`](infrastructure/README.md);
+standalone API clients under [`clients/`](clients/README.md). The full map,
+including how to add a new app, script, alert rule or area, is in
+[`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md).
 
 ## What exists in Phase A
 

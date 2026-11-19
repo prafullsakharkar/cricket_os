@@ -425,12 +425,12 @@ exist from Phase D).
    throttling (fail-open) with a stricter `deliveries` scope.
 7. **Frontend contract + reference client** — `docs/FRONTEND_CONTRACT.md`
    (frames, recovery, close codes, parity) and a dependency-free reference
-   client (`tools/reference_client/`, stdlib SSE + minimal RFC 6455 WS).
-8. **Observability** — realtime/cache metrics, `ops/alerts/realtime_alerts.yml`
+   client (`clients/reference_client/`, stdlib SSE + minimal RFC 6455 WS).
+8. **Observability** — realtime/cache metrics, `infrastructure/ops/alerts/realtime_alerts.yml`
    (9 rules, contract-tested against the metric registry + runbooks),
    `docs/RUNBOOKS.md` realtime/cache sections.
 9. **Load tests** — `make test-loadtest-smoke` (CI): cached-read p95 ≤ 200 ms,
-   fan-out ≤ 1 s; manual k6 scripts in `loadtests/k6/`.
+   fan-out ≤ 1 s; manual k6 scripts in `backend/loadtests/k6/`.
 
 **Acceptance evidence:** `make check` + `make test-loadtest-smoke` (cached-read
 p95 ≈ 0.6 ms, fan-out burst ≈ 0.21 s / immediate ≈ 0.4 ms — budgets 200 ms /
@@ -544,9 +544,9 @@ points tables, H2H, records, form.
   8. Observability (fantasy metric family, alerts, runbooks).
   9. Docs (`FANTASY.md` + schema/domain/API/architecture/coverage/testing/
      security updates).
-  10. Coverage gate + benchmarks (`.coveragerc-phaseh`: engine/authoring/
+  10. Coverage gate + benchmarks (`backend/.coveragerc-phaseh`: engine/authoring/
       ledger/adjustments ≥ 95% branch, app ≥ 90% line; `test-phaseh` in
-      `make check`; `scripts/fantasy_benchmark.py` report-only).
+      `make check`; `backend/scripts/fantasy_benchmark.py` report-only).
 - **Tables/modules:** `fantasy` (7 tables, DDL §3.8).
 - **Endpoints:** `/fantasy/points`, `/fantasy/rulesets`
   (+ `/{id}/versions/{version}`), `/fantasy/matches/{id}` — registered only

@@ -3,7 +3,7 @@
 This is the contract between the Cricket OS API and any client (web app,
 scoreboard widget, mobile shell). It defines the realtime transports, the
 frame schema shared by SSE and WebSocket, recovery semantics, and the error
-surfaces. The reference client in `tools/reference_client/` implements every
+surfaces. The reference client in `clients/reference_client/` implements every
 rule below; read it alongside this document.
 
 ---
@@ -255,14 +255,14 @@ per-process fallback bucket.
 
 ## 8. Reference client
 
-`tools/reference_client/realtime_client.py` implements this contract in the
+`clients/reference_client/realtime_client.py` implements this contract in the
 standard library:
 
 ```bash
-uv run python tools/reference_client/realtime_client.py \
+python clients/reference_client/realtime_client.py \
     --transport sse --base-url http://localhost:8000 --match <uuid> \
     --from-seq 0 --seconds 30 --pretty
 ```
 
 Use `--transport ws` for the WebSocket feed. See
-`tools/reference_client/README.md` for the dev-demo walkthrough.
+`clients/reference_client/README.md` for the dev-demo walkthrough.
